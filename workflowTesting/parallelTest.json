@@ -1,0 +1,180 @@
+{
+  "name": "Simple Transfer Test",
+  "description": "Minimal workflow to test liquid transfer functionality",
+  "version": "1.0.0",
+  "author": "Test",
+  "created": "2024-01-01",
+  "workflow": {
+    "nodes": [
+      {
+        "id": "1",
+        "type": "input",
+        "label": "Start Node",
+        "params": {}
+      },
+      {
+        "id": "gripper_close_home",
+        "type": "otflexGripper",
+        "label": "Ensure gripper closed at home",
+        "params": {
+          "action": "on"
+        }
+      },
+      {
+        "id": "gripper_pickplace_c2",
+        "type": "otflexGripper",
+        "label": "Pick at B2, place at C2",
+        "params": {
+          "action": "pick_and_place",
+          "from_slot": "B2",
+          "to_slot": "C2",
+          "ensure_open": true,
+          "close_after_release": true,
+          "home_after": false
+        }
+      },
+      {
+        "id": "turn_on_reactor",
+        "type": "otflexReactor",
+        "label": "Turn On Reactor",
+        "params": {
+          "state": "off"
+        }
+      },
+      {
+        "id": "output",
+        "type": "output",
+        "label": "End Node",
+        "params": {}
+      }
+    ],
+    "edges": [
+      {
+        "id": "start-to-close",
+        "source": "1",
+        "target": "gripper_close_home",
+        "type": "default"
+      },
+      {
+        "id": "close-to-pickplace",
+        "source": "gripper_close_home",
+        "target": "gripper_pickplace_c2",
+        "type": "default",
+        "mode": "parallel"
+      },
+      {
+        "id": "close-to-reactor",
+        "source": "gripper_close_home",
+        "target": "turn_on_reactor",
+        "type": "default",
+        "mode": "parallel"
+      },
+      {
+        "id": "reactor-to-end",
+        "source": "turn_on_reactor",
+        "target": "output",
+        "type": "default"
+      }
+    ],
+    "executionMetadata": {
+      "suggestedExecutionOrder": [
+        "1",
+        "gripper_close_home",
+        "gripper_pickplace_c2",
+        "turn_on_reactor",
+        "output"
+      ]
+    }
+  },
+  "devices": {
+    "otflex": {
+      "module": "otflex_runtime.py",
+      "opentrons_path": "C:\\Users\\sdl1_\\MattTests\\OT-Job-Manager\\opentrons.py",
+      "controller_ip": "169.254.179.32",
+      "arduino": {
+        "port": "COM4",
+        "baudrate": 115200
+      },
+      "deck": {
+        "slots": {
+          "A2": {
+            "name": "parallel_electrode_module",
+            "display": "parallel_electrode_station",
+            "labware": "custom_parallel_electrode_station",
+            "file": "labware\\sdl1_parallel_electrode_tiprack.json",
+            "slot_label": "A2"
+          },
+          "B1": {
+            "name": "destination_plate",
+            "display": "destination",
+            "labware": "actuated_reactor",
+            "file": "labware\\actuated_reactor.json",
+            "slot_label": "B1"
+          },
+          "B2": {
+            "name": "source_plate",
+            "display": "source",
+            "labware": "11_vials_20mL",
+            "file": "labware\\sdl1_11_vials_20mL.json",
+            "slot_label": "B2"
+          },
+          "C3": {
+            "name": "tiprack_1000ul",
+            "display": "tiprack",
+            "labware": "opentrons_flex_96_tiprack_1000ul"
+          }
+        },
+        "pipettes": {
+          "right": {
+            "model": "p1000_single_flex",
+            "mount": "right"
+          }
+        },
+        "gripper_slots": {
+          "home": {
+            "pick": [
+              230,
+              260,
+              150
+            ],
+            "place": [
+              230,
+              260,
+              150
+            ],
+            "safe_z": 150
+          },
+          "B2": {
+            "pick": [
+              230,
+              260,
+              63
+            ],
+            "place": [
+              230,
+              260,
+              63
+            ],
+            "safe_z": 150
+          },
+          "C2": {
+            "pick": [
+              230,
+              150,
+              10
+            ],
+            "place": [
+              230,
+              150,
+              10
+            ],
+            "safe_z": 150
+          }
+        }
+      }
+    },
+    "arm": {
+      "module": "myxArm_Utils_dryrun.py"
+    }
+  }
+}

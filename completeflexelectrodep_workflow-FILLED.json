@@ -1,0 +1,3635 @@
+{
+  "metadata": {
+    "id": "workflow-1756398427803",
+    "name": "CompleteFlexElectrodep",
+    "description": "Testing of full liquid handling, reactor control and furnace control",
+    "createdAt": "2025-08-28T16:27:07.803Z",
+    "updatedAt": "2025-08-28T16:27:07.803Z",
+    "author": "user",
+    "version": "1.0",
+    "tags": []
+  },
+  "workflow": {
+    "nodes": [
+      {
+        "id": "1",
+        "type": "input",
+        "label": "Start Node",
+        "params": {}
+      },
+      {
+        "id": "otflexGripper_dndnode_1",
+        "type": "otflexGripper",
+        "label": "OTFlex Gripper",
+        "params": {
+          "action": "close",
+          "force": 30,
+          "jaw_width": 38,
+          "resourceLocks": [
+            "deck:slot3"
+          ]
+        }
+      },
+      {
+        "id": "otflexTransfer_dndnode_2",
+        "type": "otflexTransfer",
+        "label": "OTFlex Transfer",
+        "params": {
+          "from": {
+            "labware": "source_plate",
+            "well": "A1",
+            "offsetZ": 2
+          },
+          "to": {
+            "labware": "parallel_electrode_module",
+            "well": "A1",
+            "offsetZ": -2
+          },
+          "volume_uL": 100,
+          "move_speed": 150,
+          "pipette": "p1000_single_flex",
+          "tiprack": "tiprack_1000ul",
+          "resourceLocks": [
+            "deck:slot3",
+            "deck:slot4"
+          ]
+        }
+      },
+      {
+        "id": "otflexArduinoFurnace_dndnode_6",
+        "type": "otflexArduinoFurnace",
+        "label": "Arduino Furnace",
+        "params": {
+          "port": "/dev/ttyACM0",
+          "profile": [
+            {
+              "setpoint": 60,
+              "hold_s": 120
+            },
+            {
+              "setpoint": 80,
+              "hold_s": 180
+            }
+          ],
+          "ultrasound": {
+            "relay": 6,
+            "duty": 70,
+            "on": true
+          },
+          "target_cartridge": 0,
+          "resourceLocks": [
+            "furnace:chamber1"
+          ]
+        }
+      },
+      {
+        "id": "otflexElectrodeWash_dndnode_7",
+        "type": "otflexElectrodeWash",
+        "label": "OTFlex Electrode Wash",
+        "params": {
+          "wash_station": "station1",
+          "rinse_sequence": [
+            {
+              "pump": 3,
+              "volume_ml": 5.0,
+              "duration_s": 10
+            },
+            {
+              "pump": 5,
+              "volume_ml": 5.0,
+              "duration_s": 10
+            }
+          ],
+          "ultrasound": {
+            "relay": 7,
+            "on": true,
+            "duration_s": 20
+          },
+          "resourceLocks": [
+            "wash:station1"
+          ]
+        }
+      },
+      {
+        "id": "otflexArduinoPump_dndnode_10",
+        "type": "otflexArduinoPump",
+        "label": "Arduino Pump",
+        "params": {
+          "pump_id": 0,
+          "volume_ml": 1.0,
+          "calibration": {
+            "slope": 10.0,
+            "intercept": 0.0
+          },
+          "direction": "dispense",
+          "target": "reactor_plate",
+          "well": "A1"
+        }
+      },
+      {
+        "id": "otflexMyxArmPosition_dndnode_11",
+        "type": "otflexMyxArmPosition",
+        "label": "MyxArm Position",
+        "params": {
+          "frame": "arm_base",
+          "pose": [
+            -91.0,
+            310.0,
+            247.0,
+            180.0,
+            0.0,
+            -176.0
+          ],
+          "speed": 100,
+          "accel": 200,
+          "blend": 0,
+          "safe_z": 200
+        }
+      },
+      {
+        "id": "otflexMyxArmGripper_dndnode_12",
+        "type": "otflexMyxArmGripper",
+        "label": "MyxArm Gripper",
+        "params": {
+          "action": "close",
+          "width_mm": 38,
+          "force": 30,
+          "hold": true
+        }
+      },
+      {
+        "id": "otflexArduinoElectrode_dndnode_13",
+        "type": "otflexArduinoElectrode",
+        "label": "Arduino Electrode",
+        "params": {
+          "cartridge": 0,
+          "electrode": "WE",
+          "insert_depth_mm": -24,
+          "approach_z": 5,
+          "resourceLocks": [
+            "deck:slot4"
+          ]
+        }
+      },
+      {
+        "id": "sdl1ElectrochemicalMeasurement_dndnode_17",
+        "type": "sdl1ElectrochemicalMeasurement",
+        "label": "Electrochemical Measurement",
+        "params": {
+          "uo_name": "Enhanced_Electrochemical_Measurement",
+          "description": "Enhanced electrochemical measurement with real-time data collection and element sequencing",
+          "wait_before": 1,
+          "wait_after": 1,
+          "error_handling": "stop",
+          "log_level": "INFO",
+          "com_port": "COM10",
+          "channel": 4,
+          "sequence_enabled": true,
+          "sequence_cycles": 1,
+          "cp_deposition_enabled": true,
+          "cp_deposition_current": -0.004,
+          "cp_deposition_duration": 3,
+          "cp_deposition_voltage_limit": 1,
+          "cp_deposition_sample_interval": 0.1,
+          "ocv_post_deposition_enabled": true,
+          "ocv_post_deposition_duration": 3,
+          "ocv_post_deposition_sample_interval": 1,
+          "peis_post_deposition_enabled": true,
+          "peis_post_deposition_start_freq": 10000,
+          "peis_post_deposition_end_freq": 1000,
+          "peis_post_deposition_points_per_decade": 5,
+          "peis_post_deposition_dc_bias": 0,
+          "peis_post_deposition_ac_amplitude": 0.01,
+          "peis_post_deposition_bias_vs_ocp": true,
+          "peis_post_deposition_min_cycles": 1,
+          "cp_dissolution_enabled": true,
+          "cp_dissolution_current": 0.004,
+          "cp_dissolution_duration": 3,
+          "cp_dissolution_voltage_limit": 1,
+          "cp_dissolution_max_voltage": -0.5,
+          "cp_dissolution_sample_interval": 0.1,
+          "ocv_post_dissolution_enabled": true,
+          "ocv_post_dissolution_duration": 3,
+          "ocv_post_dissolution_sample_interval": 1,
+          "peis_post_dissolution_enabled": true,
+          "peis_post_dissolution_start_freq": 10000,
+          "peis_post_dissolution_end_freq": 1000,
+          "peis_post_dissolution_points_per_decade": 5,
+          "peis_post_dissolution_dc_bias": 0,
+          "peis_post_dissolution_ac_amplitude": 0.01,
+          "peis_post_dissolution_bias_vs_ocp": true,
+          "peis_post_dissolution_min_cycles": 1,
+          "real_time_data_collection": true,
+          "data_save_enabled": true,
+          "experiment_name_template": "Zinc_Deposition_{timestamp}",
+          "element_logging_enabled": true,
+          "dc_data_columns": [
+            "timestamp_s",
+            "current_A",
+            "we_voltage_V"
+          ],
+          "ac_data_columns": [
+            "timestamp",
+            "frequency",
+            "absoluteImpedance",
+            "realImpedance",
+            "imagImpedance",
+            "phaseAngle",
+            "numberOfCycles"
+          ],
+          "element_status_callback": true,
+          "measurement_type": "OCV",
+          "ocv_duration": 1000,
+          "ocv_sample_interval": 2,
+          "ocv_settle_time": 10,
+          "ocv_stability_threshold": 1.8,
+          "data_collection_enabled": true,
+          "data_tag": "TestDeposition"
+        },
+        "preserveAsUO": true,
+        "metadata": {
+          "category": "SDL1",
+          "description": "Various electrochemical measurement techniques (OCV, CP, CVA, PEIS, LSV)",
+          "parameterGroups": {
+            "common": {
+              "label": "Common Parameters",
+              "parameters": {
+                "uo_name": {
+                  "type": "string",
+                  "label": "UO Name",
+                  "description": "Custom name for this operation",
+                  "defaultValue": "Enhanced_Electrochemical_Measurement",
+                  "required": false
+                },
+                "description": {
+                  "type": "string",
+                  "label": "Description",
+                  "description": "Operation description",
+                  "defaultValue": "Enhanced electrochemical measurement with real-time data collection and element sequencing",
+                  "required": false
+                },
+                "wait_before": {
+                  "type": "number",
+                  "label": "Wait Before",
+                  "description": "Wait time before execution",
+                  "defaultValue": 0,
+                  "min": 0,
+                  "max": 3600,
+                  "step": 1,
+                  "unit": "s"
+                },
+                "wait_after": {
+                  "type": "number",
+                  "label": "Wait After",
+                  "description": "Wait time after execution",
+                  "defaultValue": 0,
+                  "min": 0,
+                  "max": 3600,
+                  "step": 1,
+                  "unit": "s"
+                },
+                "error_handling": {
+                  "type": "select",
+                  "label": "Error Handling",
+                  "description": "How to handle errors",
+                  "options": [
+                    {
+                      "value": "continue",
+                      "label": "Continue"
+                    },
+                    {
+                      "value": "stop",
+                      "label": "Stop"
+                    },
+                    {
+                      "value": "retry",
+                      "label": "Retry"
+                    }
+                  ],
+                  "defaultValue": "stop",
+                  "required": true
+                },
+                "log_level": {
+                  "type": "select",
+                  "label": "Log Level",
+                  "description": "Logging level",
+                  "options": [
+                    {
+                      "value": "DEBUG",
+                      "label": "DEBUG"
+                    },
+                    {
+                      "value": "INFO",
+                      "label": "INFO"
+                    },
+                    {
+                      "value": "WARNING",
+                      "label": "WARNING"
+                    },
+                    {
+                      "value": "ERROR",
+                      "label": "ERROR"
+                    }
+                  ],
+                  "defaultValue": "INFO",
+                  "required": true
+                }
+              }
+            },
+            "hardware": {
+              "label": "Hardware Configuration",
+              "parameters": {
+                "com_port": {
+                  "type": "string",
+                  "label": "COM Port",
+                  "description": "Serial port for potentiostat connection",
+                  "defaultValue": "COM4",
+                  "required": true
+                },
+                "channel": {
+                  "type": "number",
+                  "label": "Channel",
+                  "description": "Potentiostat channel number",
+                  "defaultValue": 0,
+                  "min": 0,
+                  "max": 3,
+                  "step": 1,
+                  "required": true
+                }
+              }
+            },
+            "measurement": {
+              "label": "Measurement Configuration",
+              "parameters": {
+                "measurement_type": {
+                  "type": "select",
+                  "label": "Measurement Type",
+                  "description": "Type of electrochemical measurement",
+                  "options": [
+                    {
+                      "value": "OCV",
+                      "label": "Open Circuit Voltage (OCV)"
+                    },
+                    {
+                      "value": "CP",
+                      "label": "Chronopotentiometry (CP)"
+                    },
+                    {
+                      "value": "CVA",
+                      "label": "Cyclic Voltammetry (CVA)"
+                    },
+                    {
+                      "value": "PEIS",
+                      "label": "Potentiostatic EIS (PEIS)"
+                    },
+                    {
+                      "value": "LSV",
+                      "label": "Linear Sweep Voltammetry (LSV)"
+                    }
+                  ],
+                  "required": true
+                }
+              }
+            },
+            "ocv": {
+              "label": "OCV Parameters",
+              "parameters": {
+                "ocv_duration": {
+                  "type": "number",
+                  "label": "Duration",
+                  "description": "OCV measurement duration",
+                  "min": 1,
+                  "max": 3600,
+                  "step": 1,
+                  "unit": "s",
+                  "dependsOn": {
+                    "parameter": "measurement_type",
+                    "value": "OCV"
+                  }
+                },
+                "ocv_sample_interval": {
+                  "type": "number",
+                  "label": "Sample Interval",
+                  "description": "Time between measurements",
+                  "min": 0.1,
+                  "max": 60,
+                  "step": 0.1,
+                  "unit": "s",
+                  "dependsOn": {
+                    "parameter": "measurement_type",
+                    "value": "OCV"
+                  }
+                },
+                "ocv_settle_time": {
+                  "type": "number",
+                  "label": "Settle Time",
+                  "description": "Initial settling time before measurement",
+                  "min": 0,
+                  "max": 60,
+                  "step": 1,
+                  "unit": "s",
+                  "dependsOn": {
+                    "parameter": "measurement_type",
+                    "value": "OCV"
+                  }
+                },
+                "ocv_stability_threshold": {
+                  "type": "number",
+                  "label": "Stability Threshold",
+                  "description": "Voltage stability requirement for OCV",
+                  "min": 0.0001,
+                  "max": 0.1,
+                  "step": 0.0001,
+                  "unit": "V",
+                  "dependsOn": {
+                    "parameter": "measurement_type",
+                    "value": "OCV"
+                  }
+                }
+              }
+            },
+            "cp": {
+              "label": "CP Parameters",
+              "parameters": {
+                "cp_current": {
+                  "type": "number",
+                  "label": "Current",
+                  "description": "Applied current",
+                  "min": -0.1,
+                  "max": 0.1,
+                  "step": 0.0001,
+                  "unit": "A",
+                  "dependsOn": {
+                    "parameter": "measurement_type",
+                    "value": "CP"
+                  }
+                },
+                "cp_duration": {
+                  "type": "number",
+                  "label": "Duration",
+                  "description": "CP measurement duration",
+                  "min": 1,
+                  "max": 7200,
+                  "step": 1,
+                  "unit": "s",
+                  "dependsOn": {
+                    "parameter": "measurement_type",
+                    "value": "CP"
+                  }
+                },
+                "cp_sample_interval": {
+                  "type": "number",
+                  "label": "Sample Interval",
+                  "description": "Time between measurements",
+                  "min": 0.1,
+                  "max": 60,
+                  "step": 0.1,
+                  "unit": "s",
+                  "dependsOn": {
+                    "parameter": "measurement_type",
+                    "value": "CP"
+                  }
+                },
+                "cp_voltage_limit_min": {
+                  "type": "number",
+                  "label": "Min Voltage Limit",
+                  "description": "Minimum voltage limit",
+                  "min": -2,
+                  "max": 0,
+                  "step": 0.01,
+                  "unit": "V",
+                  "dependsOn": {
+                    "parameter": "measurement_type",
+                    "value": "CP"
+                  }
+                },
+                "cp_voltage_limit_max": {
+                  "type": "number",
+                  "label": "Max Voltage Limit",
+                  "description": "Maximum voltage limit",
+                  "min": 0,
+                  "max": 2,
+                  "step": 0.01,
+                  "unit": "V",
+                  "dependsOn": {
+                    "parameter": "measurement_type",
+                    "value": "CP"
+                  }
+                }
+              }
+            },
+            "cva": {
+              "label": "CVA Parameters",
+              "parameters": {
+                "cva_start_voltage": {
+                  "type": "number",
+                  "label": "Start Voltage",
+                  "description": "Starting voltage for cyclic voltammetry",
+                  "min": -2,
+                  "max": 2,
+                  "step": 0.01,
+                  "unit": "V",
+                  "dependsOn": {
+                    "parameter": "measurement_type",
+                    "value": "CVA"
+                  }
+                },
+                "cva_end_voltage": {
+                  "type": "number",
+                  "label": "End Voltage",
+                  "description": "Ending voltage for cyclic voltammetry",
+                  "min": -2,
+                  "max": 2,
+                  "step": 0.01,
+                  "unit": "V",
+                  "dependsOn": {
+                    "parameter": "measurement_type",
+                    "value": "CVA"
+                  }
+                },
+                "cva_scan_rate": {
+                  "type": "number",
+                  "label": "Scan Rate",
+                  "description": "Voltage scan rate",
+                  "min": 0.001,
+                  "max": 1,
+                  "step": 0.001,
+                  "unit": "V/s",
+                  "dependsOn": {
+                    "parameter": "measurement_type",
+                    "value": "CVA"
+                  }
+                },
+                "cva_cycles": {
+                  "type": "number",
+                  "label": "Number of Cycles",
+                  "description": "Number of CV cycles to perform",
+                  "min": 1,
+                  "max": 100,
+                  "step": 1,
+                  "unit": "cycles",
+                  "dependsOn": {
+                    "parameter": "measurement_type",
+                    "value": "CVA"
+                  }
+                },
+                "cva_sample_interval": {
+                  "type": "number",
+                  "label": "Sample Interval",
+                  "description": "Time between measurements",
+                  "min": 0.001,
+                  "max": 1,
+                  "step": 0.001,
+                  "unit": "s",
+                  "dependsOn": {
+                    "parameter": "measurement_type",
+                    "value": "CVA"
+                  }
+                }
+              }
+            },
+            "peis": {
+              "label": "PEIS Parameters",
+              "parameters": {
+                "peis_start_frequency": {
+                  "type": "number",
+                  "label": "Start Frequency",
+                  "description": "Starting frequency for impedance sweep (10kHz from script)",
+                  "min": 0.1,
+                  "max": 100000,
+                  "step": 1,
+                  "unit": "Hz",
+                  "dependsOn": {
+                    "parameter": "measurement_type",
+                    "value": "PEIS"
+                  }
+                },
+                "peis_end_frequency": {
+                  "type": "number",
+                  "label": "End Frequency",
+                  "description": "Ending frequency for impedance sweep (0.1Hz from script)",
+                  "min": 0.1,
+                  "max": 1000,
+                  "step": 0.1,
+                  "unit": "Hz",
+                  "dependsOn": {
+                    "parameter": "measurement_type",
+                    "value": "PEIS"
+                  }
+                },
+                "peis_points_per_decade": {
+                  "type": "number",
+                  "label": "Steps per Decade",
+                  "description": "Number of measurement steps per frequency decade (5 from script)",
+                  "min": 1,
+                  "max": 20,
+                  "step": 0.5,
+                  "unit": "",
+                  "dependsOn": {
+                    "parameter": "measurement_type",
+                    "value": "PEIS"
+                  }
+                },
+                "peis_minimum_cycles": {
+                  "type": "number",
+                  "label": "Minimum Cycles",
+                  "description": "Minimum number of cycles per frequency point",
+                  "min": 1,
+                  "max": 10,
+                  "step": 1,
+                  "unit": "cycles",
+                  "dependsOn": {
+                    "parameter": "measurement_type",
+                    "value": "PEIS"
+                  }
+                },
+                "peis_ac_amplitude": {
+                  "type": "number",
+                  "label": "AC Amplitude",
+                  "description": "AC signal amplitude",
+                  "min": 0.001,
+                  "max": 0.1,
+                  "step": 0.001,
+                  "unit": "V",
+                  "dependsOn": {
+                    "parameter": "measurement_type",
+                    "value": "PEIS"
+                  }
+                },
+                "peis_dc_bias": {
+                  "type": "number",
+                  "label": "DC Bias",
+                  "description": "DC bias voltage",
+                  "min": -2,
+                  "max": 2,
+                  "step": 0.01,
+                  "unit": "V",
+                  "dependsOn": {
+                    "parameter": "measurement_type",
+                    "value": "PEIS"
+                  }
+                },
+                "peis_bias_vs_ocp": {
+                  "type": "boolean",
+                  "label": "Bias vs OCP",
+                  "description": "Apply DC bias relative to OCP",
+                  "dependsOn": {
+                    "parameter": "measurement_type",
+                    "value": "PEIS"
+                  }
+                }
+              }
+            },
+            "lsv": {
+              "label": "LSV Parameters",
+              "parameters": {
+                "lsv_start_voltage": {
+                  "type": "number",
+                  "label": "Start Voltage",
+                  "description": "Starting voltage for linear sweep voltammetry",
+                  "min": -2,
+                  "max": 2,
+                  "step": 0.01,
+                  "unit": "V",
+                  "dependsOn": {
+                    "parameter": "measurement_type",
+                    "value": "LSV"
+                  }
+                },
+                "lsv_end_voltage": {
+                  "type": "number",
+                  "label": "End Voltage",
+                  "description": "Ending voltage for linear sweep voltammetry",
+                  "min": -2,
+                  "max": 2,
+                  "step": 0.01,
+                  "unit": "V",
+                  "dependsOn": {
+                    "parameter": "measurement_type",
+                    "value": "LSV"
+                  }
+                },
+                "lsv_scan_rate": {
+                  "type": "number",
+                  "label": "Scan Rate",
+                  "description": "Voltage scan rate",
+                  "min": 0.001,
+                  "max": 1,
+                  "step": 0.001,
+                  "unit": "V/s",
+                  "dependsOn": {
+                    "parameter": "measurement_type",
+                    "value": "LSV"
+                  }
+                },
+                "lsv_sample_interval": {
+                  "type": "number",
+                  "label": "Sample Interval",
+                  "description": "Time between measurements",
+                  "min": 0.001,
+                  "max": 1,
+                  "step": 0.001,
+                  "unit": "s",
+                  "dependsOn": {
+                    "parameter": "measurement_type",
+                    "value": "LSV"
+                  }
+                }
+              }
+            },
+            "data_collection": {
+              "label": "Data Collection Settings",
+              "parameters": {
+                "data_collection_enabled": {
+                  "type": "boolean",
+                  "label": "Data Collection Enabled",
+                  "description": "Whether to collect data from this measurement step"
+                },
+                "cycle_dependent_collection": {
+                  "type": "boolean",
+                  "label": "Cycle Dependent Collection",
+                  "description": "Data collection depends on current cycle number (controlled by Sequence Control)"
+                },
+                "data_tag": {
+                  "type": "string",
+                  "label": "Data Tag/Label",
+                  "description": "Tag for identifying this data in analysis (e.g., \"Deposition\", \"Dissolution\", \"Rest\")",
+                  "required": true
+                }
+              }
+            },
+            "sequence": {
+              "label": "Sequence Configuration",
+              "parameters": {
+                "sequence_enabled": {
+                  "type": "boolean",
+                  "label": "Enable Sequence",
+                  "description": "Enable multi-element deposition/dissolution sequence",
+                  "defaultValue": true
+                },
+                "sequence_cycles": {
+                  "type": "number",
+                  "label": "Sequence Cycles",
+                  "description": "Number of complete deposition-dissolution cycles to perform",
+                  "defaultValue": 1,
+                  "min": 1,
+                  "max": 100,
+                  "step": 1,
+                  "dependsOn": {
+                    "parameter": "sequence_enabled",
+                    "value": true
+                  }
+                }
+              }
+            },
+            "deposition": {
+              "label": "Deposition Parameters",
+              "parameters": {
+                "cp_deposition_enabled": {
+                  "type": "boolean",
+                  "label": "Enable CP Deposition",
+                  "description": "Enable chronopotentiometry deposition step",
+                  "defaultValue": true,
+                  "dependsOn": {
+                    "parameter": "sequence_enabled",
+                    "value": true
+                  }
+                },
+                "cp_deposition_current": {
+                  "type": "number",
+                  "label": "Deposition Current",
+                  "description": "Applied current for deposition (negative for cathodic)",
+                  "defaultValue": -0.004,
+                  "min": -0.1,
+                  "max": 0.1,
+                  "step": 0.0001,
+                  "unit": "A",
+                  "dependsOn": {
+                    "parameter": "cp_deposition_enabled",
+                    "value": true
+                  }
+                },
+                "cp_deposition_duration": {
+                  "type": "number",
+                  "label": "Deposition Duration",
+                  "description": "Duration of deposition step",
+                  "defaultValue": 3,
+                  "min": 1,
+                  "max": 3600,
+                  "step": 1,
+                  "unit": "s",
+                  "dependsOn": {
+                    "parameter": "cp_deposition_enabled",
+                    "value": true
+                  }
+                },
+                "cp_deposition_voltage_limit": {
+                  "type": "number",
+                  "label": "Voltage Limit",
+                  "description": "Maximum voltage limit during deposition",
+                  "defaultValue": 1,
+                  "min": -5,
+                  "max": 5,
+                  "step": 0.1,
+                  "unit": "V",
+                  "dependsOn": {
+                    "parameter": "cp_deposition_enabled",
+                    "value": true
+                  }
+                },
+                "cp_deposition_sample_interval": {
+                  "type": "number",
+                  "label": "Sample Interval",
+                  "description": "Time between measurements during deposition",
+                  "defaultValue": 0.1,
+                  "min": 0.01,
+                  "max": 10,
+                  "step": 0.01,
+                  "unit": "s",
+                  "dependsOn": {
+                    "parameter": "cp_deposition_enabled",
+                    "value": true
+                  }
+                }
+              }
+            },
+            "post_deposition_ocv": {
+              "label": "Post-Deposition OCV",
+              "parameters": {
+                "ocv_post_deposition_enabled": {
+                  "type": "boolean",
+                  "label": "Enable Post-Deposition OCV",
+                  "description": "Measure OCV after deposition step",
+                  "defaultValue": true,
+                  "dependsOn": {
+                    "parameter": "sequence_enabled",
+                    "value": true
+                  }
+                },
+                "ocv_post_deposition_duration": {
+                  "type": "number",
+                  "label": "OCV Duration",
+                  "description": "Duration of OCV measurement after deposition",
+                  "defaultValue": 3,
+                  "min": 1,
+                  "max": 3600,
+                  "step": 1,
+                  "unit": "s",
+                  "dependsOn": {
+                    "parameter": "ocv_post_deposition_enabled",
+                    "value": true
+                  }
+                },
+                "ocv_post_deposition_sample_interval": {
+                  "type": "number",
+                  "label": "Sample Interval",
+                  "description": "Time between OCV measurements",
+                  "defaultValue": 1,
+                  "min": 0.1,
+                  "max": 60,
+                  "step": 0.1,
+                  "unit": "s",
+                  "dependsOn": {
+                    "parameter": "ocv_post_deposition_enabled",
+                    "value": true
+                  }
+                }
+              }
+            },
+            "post_deposition_peis": {
+              "label": "Post-Deposition PEIS",
+              "parameters": {
+                "peis_post_deposition_enabled": {
+                  "type": "boolean",
+                  "label": "Enable Post-Deposition PEIS",
+                  "description": "Perform PEIS measurement after deposition",
+                  "defaultValue": true,
+                  "dependsOn": {
+                    "parameter": "sequence_enabled",
+                    "value": true
+                  }
+                },
+                "peis_post_deposition_start_freq": {
+                  "type": "number",
+                  "label": "Start Frequency",
+                  "description": "Starting frequency for PEIS sweep",
+                  "defaultValue": 10000,
+                  "min": 0.1,
+                  "max": 1000000,
+                  "step": 0.1,
+                  "unit": "Hz",
+                  "dependsOn": {
+                    "parameter": "peis_post_deposition_enabled",
+                    "value": true
+                  }
+                },
+                "peis_post_deposition_end_freq": {
+                  "type": "number",
+                  "label": "End Frequency",
+                  "description": "Ending frequency for PEIS sweep",
+                  "defaultValue": 1000,
+                  "min": 0.1,
+                  "max": 1000000,
+                  "step": 0.1,
+                  "unit": "Hz",
+                  "dependsOn": {
+                    "parameter": "peis_post_deposition_enabled",
+                    "value": true
+                  }
+                },
+                "peis_post_deposition_points_per_decade": {
+                  "type": "number",
+                  "label": "Points per Decade",
+                  "description": "Number of measurement points per frequency decade",
+                  "defaultValue": 5,
+                  "min": 1,
+                  "max": 20,
+                  "step": 1,
+                  "dependsOn": {
+                    "parameter": "peis_post_deposition_enabled",
+                    "value": true
+                  }
+                },
+                "peis_post_deposition_dc_bias": {
+                  "type": "number",
+                  "label": "DC Bias",
+                  "description": "DC bias voltage for PEIS measurement",
+                  "defaultValue": 0,
+                  "min": -2,
+                  "max": 2,
+                  "step": 0.01,
+                  "unit": "V",
+                  "dependsOn": {
+                    "parameter": "peis_post_deposition_enabled",
+                    "value": true
+                  }
+                },
+                "peis_post_deposition_ac_amplitude": {
+                  "type": "number",
+                  "label": "AC Amplitude",
+                  "description": "AC signal amplitude for PEIS",
+                  "defaultValue": 0.01,
+                  "min": 0.001,
+                  "max": 0.1,
+                  "step": 0.001,
+                  "unit": "V",
+                  "dependsOn": {
+                    "parameter": "peis_post_deposition_enabled",
+                    "value": true
+                  }
+                },
+                "peis_post_deposition_bias_vs_ocp": {
+                  "type": "boolean",
+                  "label": "Bias vs OCP",
+                  "description": "Apply bias relative to open circuit potential",
+                  "defaultValue": true,
+                  "dependsOn": {
+                    "parameter": "peis_post_deposition_enabled",
+                    "value": true
+                  }
+                },
+                "peis_post_deposition_min_cycles": {
+                  "type": "number",
+                  "label": "Minimum Cycles",
+                  "description": "Minimum number of cycles per frequency point",
+                  "defaultValue": 1,
+                  "min": 1,
+                  "max": 10,
+                  "step": 1,
+                  "dependsOn": {
+                    "parameter": "peis_post_deposition_enabled",
+                    "value": true
+                  }
+                }
+              }
+            },
+            "dissolution": {
+              "label": "Dissolution Parameters",
+              "parameters": {
+                "cp_dissolution_enabled": {
+                  "type": "boolean",
+                  "label": "Enable CP Dissolution",
+                  "description": "Enable chronopotentiometry dissolution step",
+                  "defaultValue": true,
+                  "dependsOn": {
+                    "parameter": "sequence_enabled",
+                    "value": true
+                  }
+                },
+                "cp_dissolution_current": {
+                  "type": "number",
+                  "label": "Dissolution Current",
+                  "description": "Applied current for dissolution (positive for anodic)",
+                  "defaultValue": 0.004,
+                  "min": -0.1,
+                  "max": 0.1,
+                  "step": 0.0001,
+                  "unit": "A",
+                  "dependsOn": {
+                    "parameter": "cp_dissolution_enabled",
+                    "value": true
+                  }
+                },
+                "cp_dissolution_duration": {
+                  "type": "number",
+                  "label": "Dissolution Duration",
+                  "description": "Duration of dissolution step",
+                  "defaultValue": 3,
+                  "min": 1,
+                  "max": 3600,
+                  "step": 1,
+                  "unit": "s",
+                  "dependsOn": {
+                    "parameter": "cp_dissolution_enabled",
+                    "value": true
+                  }
+                },
+                "cp_dissolution_voltage_limit": {
+                  "type": "number",
+                  "label": "Voltage Limit",
+                  "description": "Maximum voltage limit during dissolution",
+                  "defaultValue": 1,
+                  "min": -5,
+                  "max": 5,
+                  "step": 0.1,
+                  "unit": "V",
+                  "dependsOn": {
+                    "parameter": "cp_dissolution_enabled",
+                    "value": true
+                  }
+                },
+                "cp_dissolution_max_voltage": {
+                  "type": "number",
+                  "label": "Maximum Voltage",
+                  "description": "Maximum allowed voltage during dissolution",
+                  "defaultValue": -0.5,
+                  "min": -5,
+                  "max": 5,
+                  "step": 0.1,
+                  "unit": "V",
+                  "dependsOn": {
+                    "parameter": "cp_dissolution_enabled",
+                    "value": true
+                  }
+                },
+                "cp_dissolution_sample_interval": {
+                  "type": "number",
+                  "label": "Sample Interval",
+                  "description": "Time between measurements during dissolution",
+                  "defaultValue": 0.1,
+                  "min": 0.01,
+                  "max": 10,
+                  "step": 0.01,
+                  "unit": "s",
+                  "dependsOn": {
+                    "parameter": "cp_dissolution_enabled",
+                    "value": true
+                  }
+                }
+              }
+            },
+            "post_dissolution_ocv": {
+              "label": "Post-Dissolution OCV",
+              "parameters": {
+                "ocv_post_dissolution_enabled": {
+                  "type": "boolean",
+                  "label": "Enable Post-Dissolution OCV",
+                  "description": "Measure OCV after dissolution step",
+                  "defaultValue": true,
+                  "dependsOn": {
+                    "parameter": "sequence_enabled",
+                    "value": true
+                  }
+                },
+                "ocv_post_dissolution_duration": {
+                  "type": "number",
+                  "label": "OCV Duration",
+                  "description": "Duration of OCV measurement after dissolution",
+                  "defaultValue": 3,
+                  "min": 1,
+                  "max": 3600,
+                  "step": 1,
+                  "unit": "s",
+                  "dependsOn": {
+                    "parameter": "ocv_post_dissolution_enabled",
+                    "value": true
+                  }
+                },
+                "ocv_post_dissolution_sample_interval": {
+                  "type": "number",
+                  "label": "Sample Interval",
+                  "description": "Time between OCV measurements",
+                  "defaultValue": 1,
+                  "min": 0.1,
+                  "max": 60,
+                  "step": 0.1,
+                  "unit": "s",
+                  "dependsOn": {
+                    "parameter": "ocv_post_dissolution_enabled",
+                    "value": true
+                  }
+                }
+              }
+            },
+            "post_dissolution_peis": {
+              "label": "Post-Dissolution PEIS",
+              "parameters": {
+                "peis_post_dissolution_enabled": {
+                  "type": "boolean",
+                  "label": "Enable Post-Dissolution PEIS",
+                  "description": "Perform PEIS measurement after dissolution",
+                  "defaultValue": true,
+                  "dependsOn": {
+                    "parameter": "sequence_enabled",
+                    "value": true
+                  }
+                },
+                "peis_post_dissolution_start_freq": {
+                  "type": "number",
+                  "label": "Start Frequency",
+                  "description": "Starting frequency for PEIS sweep",
+                  "defaultValue": 10000,
+                  "min": 0.1,
+                  "max": 1000000,
+                  "step": 0.1,
+                  "unit": "Hz",
+                  "dependsOn": {
+                    "parameter": "peis_post_dissolution_enabled",
+                    "value": true
+                  }
+                },
+                "peis_post_dissolution_end_freq": {
+                  "type": "number",
+                  "label": "End Frequency",
+                  "description": "Ending frequency for PEIS sweep",
+                  "defaultValue": 1000,
+                  "min": 0.1,
+                  "max": 1000000,
+                  "step": 0.1,
+                  "unit": "Hz",
+                  "dependsOn": {
+                    "parameter": "peis_post_dissolution_enabled",
+                    "value": true
+                  }
+                },
+                "peis_post_dissolution_points_per_decade": {
+                  "type": "number",
+                  "label": "Points per Decade",
+                  "description": "Number of measurement points per frequency decade",
+                  "defaultValue": 5,
+                  "min": 1,
+                  "max": 20,
+                  "step": 1,
+                  "dependsOn": {
+                    "parameter": "peis_post_dissolution_enabled",
+                    "value": true
+                  }
+                },
+                "peis_post_dissolution_dc_bias": {
+                  "type": "number",
+                  "label": "DC Bias",
+                  "description": "DC bias voltage for PEIS measurement",
+                  "defaultValue": 0,
+                  "min": -2,
+                  "max": 2,
+                  "step": 0.01,
+                  "unit": "V",
+                  "dependsOn": {
+                    "parameter": "peis_post_dissolution_enabled",
+                    "value": true
+                  }
+                },
+                "peis_post_dissolution_ac_amplitude": {
+                  "type": "number",
+                  "label": "AC Amplitude",
+                  "description": "AC signal amplitude for PEIS",
+                  "defaultValue": 0.01,
+                  "min": 0.001,
+                  "max": 0.1,
+                  "step": 0.001,
+                  "unit": "V",
+                  "dependsOn": {
+                    "parameter": "peis_post_dissolution_enabled",
+                    "value": true
+                  }
+                },
+                "peis_post_dissolution_bias_vs_ocp": {
+                  "type": "boolean",
+                  "label": "Bias vs OCP",
+                  "description": "Apply bias relative to open circuit potential",
+                  "defaultValue": true,
+                  "dependsOn": {
+                    "parameter": "peis_post_dissolution_enabled",
+                    "value": true
+                  }
+                },
+                "peis_post_dissolution_min_cycles": {
+                  "type": "number",
+                  "label": "Minimum Cycles",
+                  "description": "Minimum number of cycles per frequency point",
+                  "defaultValue": 1,
+                  "min": 1,
+                  "max": 10,
+                  "step": 1,
+                  "dependsOn": {
+                    "parameter": "peis_post_dissolution_enabled",
+                    "value": true
+                  }
+                }
+              }
+            },
+            "advanced_data": {
+              "label": "Advanced Data Collection",
+              "parameters": {
+                "real_time_data_collection": {
+                  "type": "boolean",
+                  "label": "Real-time Data Collection",
+                  "description": "Enable real-time DC/AC data callbacks during measurement",
+                  "defaultValue": true,
+                  "dependsOn": {
+                    "parameter": "sequence_enabled",
+                    "value": true
+                  }
+                },
+                "data_save_enabled": {
+                  "type": "boolean",
+                  "label": "Save Data to Files",
+                  "description": "Automatically save measurement data to CSV files",
+                  "defaultValue": true,
+                  "dependsOn": {
+                    "parameter": "sequence_enabled",
+                    "value": true
+                  }
+                },
+                "experiment_name_template": {
+                  "type": "string",
+                  "label": "Experiment Name Template",
+                  "description": "Template for experiment file naming (use {timestamp} for auto-timestamp)",
+                  "defaultValue": "Zinc_Deposition_{timestamp}",
+                  "dependsOn": {
+                    "parameter": "data_save_enabled",
+                    "value": true
+                  }
+                },
+                "element_logging_enabled": {
+                  "type": "boolean",
+                  "label": "Element Logging",
+                  "description": "Log element start/stop events for debugging",
+                  "defaultValue": true,
+                  "dependsOn": {
+                    "parameter": "sequence_enabled",
+                    "value": true
+                  }
+                }
+              }
+            }
+          },
+          "primitiveOperations": [
+            {
+              "operation": "wait",
+              "parameters": {
+                "duration": 1,
+                "unit": "seconds"
+              }
+            },
+            {
+              "operation": "connect_electrodes",
+              "parameters": {
+                "measurement_type": "OCV"
+              }
+            },
+            {
+              "operation": "initialize_potentiostat",
+              "parameters": {
+                "measurement_type": "OCV"
+              }
+            },
+            {
+              "operation": "measure_ocv",
+              "parameters": {
+                "duration": 1000,
+                "sample_interval": 2
+              }
+            },
+            {
+              "operation": "record_data",
+              "parameters": {
+                "measurement_type": "OCV",
+                "timestamp": true
+              }
+            },
+            {
+              "operation": "disconnect_electrodes",
+              "parameters": {}
+            },
+            {
+              "operation": "wait",
+              "parameters": {
+                "duration": 1,
+                "unit": "seconds"
+              }
+            }
+          ],
+          "executionSteps": [
+            {
+              "operation": "wait",
+              "condition": "wait_before > 0",
+              "description": "Wait before starting"
+            },
+            {
+              "operation": "connect_electrodes",
+              "description": "Connect electrodes to potentiostat"
+            },
+            {
+              "operation": "initialize_potentiostat",
+              "description": "Initialize potentiostat settings"
+            },
+            {
+              "operation": "measure_ocv",
+              "condition": "measurement_type == OCV",
+              "description": "Measure open circuit voltage"
+            },
+            {
+              "operation": "apply_current",
+              "condition": "measurement_type == CP",
+              "description": "Apply constant current"
+            },
+            {
+              "operation": "measure_impedance",
+              "condition": "measurement_type == PEIS",
+              "description": "Measure impedance spectrum"
+            },
+            {
+              "operation": "record_data",
+              "description": "Record measurement data"
+            },
+            {
+              "operation": "disconnect_electrodes",
+              "description": "Disconnect electrodes"
+            },
+            {
+              "operation": "wait",
+              "condition": "wait_after > 0",
+              "description": "Wait after completion"
+            }
+          ]
+        },
+        "executionFlow": {
+          "connections": {
+            "predecessors": [
+              {
+                "sourceNodeId": "sdl1ElectrodeSetup_dndnode_21",
+                "sourceHandle": "sdl1ElectrodeSetup_dndnode_21-connection",
+                "targetHandle": "sdl1ElectrochemicalMeasurement_dndnode_17-target",
+                "connectionType": "custom",
+                "delay": 10,
+                "priority": 1
+              }
+            ],
+            "successors": [
+              {
+                "targetNodeId": "sdl1ElectrodeManipulation-1756397483835",
+                "sourceHandle": "sdl1ElectrochemicalMeasurement_dndnode_17-connection",
+                "targetHandle": "sdl1ElectrodeManipulation-1756397483835-target",
+                "connectionType": "custom",
+                "delay": 10,
+                "priority": 1
+              }
+            ]
+          },
+          "executionOrder": "dependent",
+          "parallelExecution": false,
+          "conditionalExecution": false
+        }
+      },
+      {
+        "id": "sdl1ElectrodeManipulation_dndnode_18",
+        "type": "sdl1ElectrodeManipulation",
+        "label": "Electrode Manipulation",
+        "params": {
+          "uo_name": "Electrode_Manipulation",
+          "description": "Handle electrode pickup, insertion, and return operations",
+          "wait_before": 1,
+          "wait_after": 1,
+          "error_handling": "stop",
+          "log_level": "ERROR",
+          "operation_type": "pickup",
+          "electrode_type": "reference",
+          "target_cell": "A1",
+          "approach_speed": 50,
+          "insertion_speed": 25,
+          "pickup_offset_x": 0.6,
+          "pickup_offset_y": 0.5,
+          "pickup_offset_z": 3,
+          "insert_offset_x": 0.5,
+          "insert_offset_y": 0.5,
+          "insert_approach_z": 5,
+          "insert_final_z": -26,
+          "return_offset_z": 6
+        },
+        "preserveAsUO": true,
+        "metadata": {
+          "category": "SDL1",
+          "description": "Handle electrode pickup, insertion, removal, and return operations",
+          "parameterGroups": {
+            "common": {
+              "label": "Common Parameters",
+              "parameters": {
+                "uo_name": {
+                  "type": "string",
+                  "label": "UO Name",
+                  "description": "Custom name for this operation",
+                  "defaultValue": "Electrode_Manipulation",
+                  "required": false
+                },
+                "description": {
+                  "type": "string",
+                  "label": "Description",
+                  "description": "Operation description",
+                  "defaultValue": "Handle electrode pickup, insertion, and return operations",
+                  "required": false
+                },
+                "wait_before": {
+                  "type": "number",
+                  "label": "Wait Before",
+                  "description": "Wait time before execution",
+                  "defaultValue": 0,
+                  "min": 0,
+                  "max": 3600,
+                  "step": 1,
+                  "unit": "s"
+                },
+                "wait_after": {
+                  "type": "number",
+                  "label": "Wait After",
+                  "description": "Wait time after execution",
+                  "defaultValue": 0,
+                  "min": 0,
+                  "max": 3600,
+                  "step": 1,
+                  "unit": "s"
+                },
+                "error_handling": {
+                  "type": "select",
+                  "label": "Error Handling",
+                  "description": "How to handle errors",
+                  "options": [
+                    {
+                      "value": "continue",
+                      "label": "Continue"
+                    },
+                    {
+                      "value": "stop",
+                      "label": "Stop"
+                    },
+                    {
+                      "value": "retry",
+                      "label": "Retry"
+                    }
+                  ],
+                  "defaultValue": "stop",
+                  "required": true
+                },
+                "log_level": {
+                  "type": "select",
+                  "label": "Log Level",
+                  "description": "Logging level",
+                  "options": [
+                    {
+                      "value": "DEBUG",
+                      "label": "DEBUG"
+                    },
+                    {
+                      "value": "INFO",
+                      "label": "INFO"
+                    },
+                    {
+                      "value": "WARNING",
+                      "label": "WARNING"
+                    },
+                    {
+                      "value": "ERROR",
+                      "label": "ERROR"
+                    }
+                  ],
+                  "defaultValue": "INFO",
+                  "required": true
+                }
+              }
+            },
+            "operation": {
+              "label": "Operation Configuration",
+              "parameters": {
+                "operation_type": {
+                  "type": "select",
+                  "label": "Operation Type",
+                  "description": "Type of electrode manipulation",
+                  "options": [
+                    {
+                      "value": "pickup",
+                      "label": "Pick Up Electrode"
+                    },
+                    {
+                      "value": "insert",
+                      "label": "Insert into Cell"
+                    },
+                    {
+                      "value": "remove",
+                      "label": "Remove from Cell"
+                    },
+                    {
+                      "value": "return",
+                      "label": "Return to Rack"
+                    }
+                  ],
+                  "defaultValue": "pickup",
+                  "required": true
+                },
+                "electrode_type": {
+                  "type": "select",
+                  "label": "Electrode Type",
+                  "description": "Which electrode to manipulate",
+                  "options": [
+                    {
+                      "value": "working",
+                      "label": "Working Electrode (A1)"
+                    },
+                    {
+                      "value": "reference",
+                      "label": "Reference/Counter (A2)"
+                    },
+                    {
+                      "value": "flush_tool",
+                      "label": "Flush Tool (B1)"
+                    }
+                  ],
+                  "defaultValue": "reference",
+                  "required": true
+                },
+                "target_cell": {
+                  "type": "select",
+                  "label": "Target Cell",
+                  "description": "Reactor cell for electrode insertion",
+                  "options": [
+                    {
+                      "value": "A1",
+                      "label": "A1"
+                    },
+                    {
+                      "value": "A2",
+                      "label": "A2"
+                    },
+                    {
+                      "value": "A3",
+                      "label": "A3"
+                    },
+                    {
+                      "value": "A4",
+                      "label": "A4"
+                    },
+                    {
+                      "value": "A5",
+                      "label": "A5"
+                    },
+                    {
+                      "value": "B1",
+                      "label": "B1"
+                    },
+                    {
+                      "value": "B2",
+                      "label": "B2"
+                    },
+                    {
+                      "value": "B3",
+                      "label": "B3"
+                    },
+                    {
+                      "value": "B4",
+                      "label": "B4"
+                    },
+                    {
+                      "value": "B5",
+                      "label": "B5"
+                    },
+                    {
+                      "value": "C1",
+                      "label": "C1"
+                    },
+                    {
+                      "value": "C2",
+                      "label": "C2"
+                    },
+                    {
+                      "value": "C3",
+                      "label": "C3"
+                    },
+                    {
+                      "value": "C4",
+                      "label": "C4"
+                    },
+                    {
+                      "value": "C5",
+                      "label": "C5"
+                    }
+                  ],
+                  "defaultValue": "A1",
+                  "required": true,
+                  "dependsOn": {
+                    "parameter": "operation_type",
+                    "values": [
+                      "insert",
+                      "remove"
+                    ]
+                  }
+                }
+              }
+            },
+            "movement": {
+              "label": "Movement Parameters",
+              "parameters": {
+                "approach_speed": {
+                  "type": "number",
+                  "label": "Approach Speed",
+                  "description": "Speed for approaching positions",
+                  "defaultValue": 50,
+                  "min": 10,
+                  "max": 400,
+                  "step": 10,
+                  "unit": "mm/s"
+                },
+                "insertion_speed": {
+                  "type": "number",
+                  "label": "Insertion Speed",
+                  "description": "Speed for electrode insertion (slower for safety)",
+                  "defaultValue": 25,
+                  "min": 10,
+                  "max": 100,
+                  "step": 5,
+                  "unit": "mm/s"
+                }
+              }
+            },
+            "pickup_offsets": {
+              "label": "Pickup Position Offsets",
+              "parameters": {
+                "pickup_offset_x": {
+                  "type": "number",
+                  "label": "Pickup Offset X",
+                  "description": "X-axis offset for electrode pickup",
+                  "defaultValue": 0.6,
+                  "min": -2,
+                  "max": 2,
+                  "step": 0.1,
+                  "unit": "mm",
+                  "dependsOn": {
+                    "parameter": "operation_type",
+                    "values": [
+                      "pickup"
+                    ]
+                  }
+                },
+                "pickup_offset_y": {
+                  "type": "number",
+                  "label": "Pickup Offset Y",
+                  "description": "Y-axis offset for electrode pickup",
+                  "defaultValue": 0.5,
+                  "min": -2,
+                  "max": 2,
+                  "step": 0.1,
+                  "unit": "mm",
+                  "dependsOn": {
+                    "parameter": "operation_type",
+                    "values": [
+                      "pickup"
+                    ]
+                  }
+                },
+                "pickup_offset_z": {
+                  "type": "number",
+                  "label": "Pickup Offset Z",
+                  "description": "Z-axis offset for electrode pickup",
+                  "defaultValue": 3,
+                  "min": 0,
+                  "max": 10,
+                  "step": 0.5,
+                  "unit": "mm",
+                  "dependsOn": {
+                    "parameter": "operation_type",
+                    "values": [
+                      "pickup"
+                    ]
+                  }
+                }
+              }
+            },
+            "insertion_offsets": {
+              "label": "Insertion Position Offsets",
+              "parameters": {
+                "insert_offset_x": {
+                  "type": "number",
+                  "label": "Insert Offset X",
+                  "description": "X-axis offset for electrode insertion",
+                  "defaultValue": 0.5,
+                  "min": -2,
+                  "max": 2,
+                  "step": 0.1,
+                  "unit": "mm",
+                  "dependsOn": {
+                    "parameter": "operation_type",
+                    "values": [
+                      "insert"
+                    ]
+                  }
+                },
+                "insert_offset_y": {
+                  "type": "number",
+                  "label": "Insert Offset Y",
+                  "description": "Y-axis offset for electrode insertion",
+                  "defaultValue": 0.5,
+                  "min": -2,
+                  "max": 2,
+                  "step": 0.1,
+                  "unit": "mm",
+                  "dependsOn": {
+                    "parameter": "operation_type",
+                    "values": [
+                      "insert"
+                    ]
+                  }
+                },
+                "insert_approach_z": {
+                  "type": "number",
+                  "label": "Approach Height",
+                  "description": "Height above cell before insertion",
+                  "defaultValue": 5,
+                  "min": 0,
+                  "max": 20,
+                  "step": 1,
+                  "unit": "mm",
+                  "dependsOn": {
+                    "parameter": "operation_type",
+                    "values": [
+                      "insert"
+                    ]
+                  }
+                },
+                "insert_final_z": {
+                  "type": "number",
+                  "label": "Insertion Depth",
+                  "description": "Final electrode insertion depth (negative value)",
+                  "defaultValue": -26,
+                  "min": -60,
+                  "max": 0,
+                  "step": 1,
+                  "unit": "mm",
+                  "dependsOn": {
+                    "parameter": "operation_type",
+                    "values": [
+                      "insert"
+                    ]
+                  }
+                }
+              }
+            },
+            "return_offsets": {
+              "label": "Return Position Offsets",
+              "parameters": {
+                "return_offset_z": {
+                  "type": "number",
+                  "label": "Return Height",
+                  "description": "Z offset for safe electrode return",
+                  "defaultValue": 6,
+                  "min": 0,
+                  "max": 20,
+                  "step": 0.5,
+                  "unit": "mm",
+                  "dependsOn": {
+                    "parameter": "operation_type",
+                    "values": [
+                      "return"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "primitiveOperations": [
+            "move_to_electrode",
+            "pickup_electrode",
+            "move_to_cell",
+            "insert_electrode",
+            "remove_electrode",
+            "return_electrode"
+          ],
+          "executionSteps": []
+        },
+        "executionFlow": {
+          "connections": {
+            "predecessors": [
+              {
+                "sourceNodeId": "otflexArduinoElectrode_dndnode_13",
+                "sourceHandle": "otflexArduinoElectrode_dndnode_13-connection",
+                "targetHandle": "sdl1ElectrodeManipulation_dndnode_18-target",
+                "connectionType": "custom",
+                "delay": 100,
+                "priority": 1
+              }
+            ],
+            "successors": [
+              {
+                "targetNodeId": "sdl1ElectrodeSetup_dndnode_21",
+                "sourceHandle": "sdl1ElectrodeManipulation_dndnode_18-connection",
+                "targetHandle": "sdl1ElectrodeSetup_dndnode_21-target",
+                "connectionType": "custom",
+                "delay": 100,
+                "priority": 1
+              }
+            ]
+          },
+          "executionOrder": "dependent",
+          "parallelExecution": false,
+          "conditionalExecution": false
+        }
+      },
+      {
+        "id": "sdl1ElectrodeSetup_dndnode_21",
+        "type": "sdl1ElectrodeSetup",
+        "label": "Electrode Setup",
+        "params": {
+          "uo_name": "Reference_Electrode_Setup",
+          "description": "Setup reference electrode for electrochemical measurement",
+          "wait_before": 1,
+          "wait_after": 1,
+          "error_handling": "stop",
+          "log_level": "ERROR",
+          "electrode_type": "counter",
+          "electrode_position": "A1",
+          "target_well": "A1",
+          "insertion_depth": 15,
+          "lateral_offset_x": 0.5,
+          "lateral_offset_y": 1,
+          "movement_speed": 50
+        },
+        "preserveAsUO": true,
+        "metadata": {
+          "category": "SDL1",
+          "description": "Electrode installation and positioning for electrochemical experiments",
+          "parameterGroups": {
+            "common": {
+              "label": "Common Parameters",
+              "parameters": {
+                "uo_name": {
+                  "type": "string",
+                  "label": "UO Name",
+                  "description": "Custom name for this operation",
+                  "defaultValue": "Reference_Electrode_Setup",
+                  "required": false
+                },
+                "description": {
+                  "type": "string",
+                  "label": "Description",
+                  "description": "Operation description",
+                  "defaultValue": "Setup reference electrode for electrochemical measurement",
+                  "required": false
+                },
+                "wait_before": {
+                  "type": "number",
+                  "label": "Wait Before",
+                  "description": "Wait time before execution",
+                  "defaultValue": 0,
+                  "min": 0,
+                  "max": 3600,
+                  "step": 1,
+                  "unit": "s"
+                },
+                "wait_after": {
+                  "type": "number",
+                  "label": "Wait After",
+                  "description": "Wait time after execution",
+                  "defaultValue": 0,
+                  "min": 0,
+                  "max": 3600,
+                  "step": 1,
+                  "unit": "s"
+                },
+                "error_handling": {
+                  "type": "select",
+                  "label": "Error Handling",
+                  "description": "How to handle errors",
+                  "options": [
+                    {
+                      "value": "continue",
+                      "label": "Continue"
+                    },
+                    {
+                      "value": "stop",
+                      "label": "Stop"
+                    },
+                    {
+                      "value": "retry",
+                      "label": "Retry"
+                    }
+                  ],
+                  "defaultValue": "stop",
+                  "required": true
+                },
+                "log_level": {
+                  "type": "select",
+                  "label": "Log Level",
+                  "description": "Logging level",
+                  "options": [
+                    {
+                      "value": "DEBUG",
+                      "label": "DEBUG"
+                    },
+                    {
+                      "value": "INFO",
+                      "label": "INFO"
+                    },
+                    {
+                      "value": "WARNING",
+                      "label": "WARNING"
+                    },
+                    {
+                      "value": "ERROR",
+                      "label": "ERROR"
+                    }
+                  ],
+                  "defaultValue": "INFO",
+                  "required": true
+                }
+              }
+            },
+            "electrode": {
+              "label": "Electrode Configuration",
+              "parameters": {
+                "electrode_type": {
+                  "type": "select",
+                  "label": "Electrode Type",
+                  "description": "Type of electrode to install",
+                  "options": [
+                    {
+                      "value": "reference",
+                      "label": "Reference Electrode"
+                    },
+                    {
+                      "value": "counter",
+                      "label": "Counter Electrode"
+                    },
+                    {
+                      "value": "working",
+                      "label": "Working Electrode"
+                    }
+                  ],
+                  "defaultValue": "reference",
+                  "required": true
+                },
+                "electrode_position": {
+                  "type": "select",
+                  "label": "Electrode Position",
+                  "description": "Storage position of the electrode",
+                  "options": [
+                    {
+                      "value": "A1",
+                      "label": "A1"
+                    },
+                    {
+                      "value": "A2",
+                      "label": "A2"
+                    },
+                    {
+                      "value": "B1",
+                      "label": "B1"
+                    },
+                    {
+                      "value": "B2",
+                      "label": "B2"
+                    }
+                  ],
+                  "defaultValue": "A2",
+                  "required": true
+                }
+              }
+            },
+            "positioning": {
+              "label": "Positioning Parameters",
+              "parameters": {
+                "target_well": {
+                  "type": "string",
+                  "label": "Target Well",
+                  "description": "Reaction well address (e.g., A1-D6)",
+                  "defaultValue": "A1",
+                  "required": true
+                },
+                "insertion_depth": {
+                  "type": "number",
+                  "label": "Insertion Depth",
+                  "description": "How deep to insert the electrode",
+                  "defaultValue": 26,
+                  "min": 0,
+                  "max": 60,
+                  "step": 1,
+                  "unit": "mm",
+                  "required": true
+                },
+                "lateral_offset_x": {
+                  "type": "number",
+                  "label": "Lateral Offset X",
+                  "description": "X-axis offset from well center",
+                  "defaultValue": 0.5,
+                  "min": -2,
+                  "max": 2,
+                  "step": 0.1,
+                  "unit": "mm"
+                },
+                "lateral_offset_y": {
+                  "type": "number",
+                  "label": "Lateral Offset Y",
+                  "description": "Y-axis offset from well center",
+                  "defaultValue": 0.5,
+                  "min": -2,
+                  "max": 2,
+                  "step": 0.1,
+                  "unit": "mm"
+                }
+              }
+            },
+            "motion": {
+              "label": "Motion Parameters",
+              "parameters": {
+                "movement_speed": {
+                  "type": "number",
+                  "label": "Movement Speed",
+                  "description": "Speed of electrode movement",
+                  "defaultValue": 50,
+                  "min": 10,
+                  "max": 100,
+                  "step": 5,
+                  "unit": "mm/s",
+                  "required": true
+                }
+              }
+            }
+          },
+          "primitiveOperations": [
+            {
+              "operation": "wait",
+              "parameters": {
+                "duration": 1,
+                "unit": "seconds"
+              }
+            },
+            {
+              "operation": "pick_electrode",
+              "parameters": {
+                "electrode_type": "counter",
+                "position": "A1"
+              }
+            },
+            {
+              "operation": "move_to_well",
+              "parameters": {
+                "target_well": "A1",
+                "speed": 50
+              }
+            },
+            {
+              "operation": "insert_electrode",
+              "parameters": {
+                "depth": 15,
+                "offset_x": 0.5,
+                "offset_y": 1,
+                "speed": 50
+              }
+            },
+            {
+              "operation": "secure_electrode",
+              "parameters": {
+                "electrode_type": "counter",
+                "well": "A1"
+              }
+            },
+            {
+              "operation": "verify_position",
+              "parameters": {
+                "expected_depth": 15,
+                "tolerance": 1
+              }
+            },
+            {
+              "operation": "wait",
+              "parameters": {
+                "duration": 1,
+                "unit": "seconds"
+              }
+            }
+          ],
+          "executionSteps": [
+            {
+              "operation": "wait",
+              "condition": "wait_before > 0",
+              "description": "Wait before starting"
+            },
+            {
+              "operation": "pick_electrode",
+              "description": "Pick electrode from storage position"
+            },
+            {
+              "operation": "move_to_well",
+              "description": "Move electrode to target well"
+            },
+            {
+              "operation": "insert_electrode",
+              "description": "Insert electrode to specified depth"
+            },
+            {
+              "operation": "secure_electrode",
+              "description": "Secure electrode in position"
+            },
+            {
+              "operation": "verify_position",
+              "description": "Verify electrode position"
+            },
+            {
+              "operation": "wait",
+              "condition": "wait_after > 0",
+              "description": "Wait after completion"
+            }
+          ]
+        },
+        "executionFlow": {
+          "connections": {
+            "predecessors": [
+              {
+                "sourceNodeId": "sdl1ElectrodeManipulation_dndnode_18",
+                "sourceHandle": "sdl1ElectrodeManipulation_dndnode_18-connection",
+                "targetHandle": "sdl1ElectrodeSetup_dndnode_21-target",
+                "connectionType": "custom",
+                "delay": 100,
+                "priority": 1
+              }
+            ],
+            "successors": [
+              {
+                "targetNodeId": "sdl1ElectrochemicalMeasurement_dndnode_17",
+                "sourceHandle": "sdl1ElectrodeSetup_dndnode_21-connection",
+                "targetHandle": "sdl1ElectrochemicalMeasurement_dndnode_17-target",
+                "connectionType": "custom",
+                "delay": 10,
+                "priority": 1
+              }
+            ]
+          },
+          "executionOrder": "dependent",
+          "parallelExecution": false,
+          "conditionalExecution": false
+        }
+      },
+      {
+        "id": "otflexMyxArmPosition-1756394925871",
+        "type": "otflexMyxArmPosition",
+        "label": "MyxArm Position",
+        "params": {
+          "frame": "arm_base",
+          "pose": [
+            -91.0,
+            310.0,
+            247.0,
+            180.0,
+            0.0,
+            -176.0
+          ],
+          "speed": 100,
+          "accel": 200,
+          "blend": 0,
+          "safe_z": 200
+        }
+      },
+      {
+        "id": "otflexMyxArmGripper-1756396945311",
+        "type": "otflexMyxArmGripper",
+        "label": "MyxArm Gripper",
+        "params": {
+          "action": "close",
+          "width_mm": 38,
+          "force": 30,
+          "hold": true
+        }
+      },
+      {
+        "id": "otflexArduinoReactor-1756397257870",
+        "type": "otflexArduinoReactor",
+        "label": "Arduino Reactor",
+        "params": {
+          "cartridge": 0,
+          "set_temperature_C": 25.0,
+          "stir": {
+            "rpm": 300,
+            "duration_s": 600
+          }
+        }
+      },
+      {
+        "id": "sdl1ElectrodeManipulation-1756397483835",
+        "type": "sdl1ElectrodeManipulation",
+        "label": "Electrode Manipulation",
+        "params": {
+          "uo_name": "Electrode_Manipulation",
+          "description": "Handle electrode pickup, insertion, and return operations",
+          "wait_before": 1,
+          "wait_after": 1,
+          "error_handling": "stop",
+          "log_level": "ERROR",
+          "operation_type": "pickup",
+          "electrode_type": "reference",
+          "target_cell": "A1",
+          "approach_speed": 50,
+          "insertion_speed": 25,
+          "pickup_offset_x": 0.6,
+          "pickup_offset_y": 0.5,
+          "pickup_offset_z": 3,
+          "insert_offset_x": 0.5,
+          "insert_offset_y": 0.5,
+          "insert_approach_z": 5,
+          "insert_final_z": -26,
+          "return_offset_z": 6
+        },
+        "preserveAsUO": true,
+        "metadata": {
+          "category": "SDL1",
+          "description": "Handle electrode pickup, insertion, removal, and return operations",
+          "parameterGroups": {
+            "common": {
+              "label": "Common Parameters",
+              "parameters": {
+                "uo_name": {
+                  "type": "string",
+                  "label": "UO Name",
+                  "description": "Custom name for this operation",
+                  "defaultValue": "Electrode_Manipulation",
+                  "required": false
+                },
+                "description": {
+                  "type": "string",
+                  "label": "Description",
+                  "description": "Operation description",
+                  "defaultValue": "Handle electrode pickup, insertion, and return operations",
+                  "required": false
+                },
+                "wait_before": {
+                  "type": "number",
+                  "label": "Wait Before",
+                  "description": "Wait time before execution",
+                  "defaultValue": 0,
+                  "min": 0,
+                  "max": 3600,
+                  "step": 1,
+                  "unit": "s"
+                },
+                "wait_after": {
+                  "type": "number",
+                  "label": "Wait After",
+                  "description": "Wait time after execution",
+                  "defaultValue": 0,
+                  "min": 0,
+                  "max": 3600,
+                  "step": 1,
+                  "unit": "s"
+                },
+                "error_handling": {
+                  "type": "select",
+                  "label": "Error Handling",
+                  "description": "How to handle errors",
+                  "options": [
+                    {
+                      "value": "continue",
+                      "label": "Continue"
+                    },
+                    {
+                      "value": "stop",
+                      "label": "Stop"
+                    },
+                    {
+                      "value": "retry",
+                      "label": "Retry"
+                    }
+                  ],
+                  "defaultValue": "stop",
+                  "required": true
+                },
+                "log_level": {
+                  "type": "select",
+                  "label": "Log Level",
+                  "description": "Logging level",
+                  "options": [
+                    {
+                      "value": "DEBUG",
+                      "label": "DEBUG"
+                    },
+                    {
+                      "value": "INFO",
+                      "label": "INFO"
+                    },
+                    {
+                      "value": "WARNING",
+                      "label": "WARNING"
+                    },
+                    {
+                      "value": "ERROR",
+                      "label": "ERROR"
+                    }
+                  ],
+                  "defaultValue": "INFO",
+                  "required": true
+                }
+              }
+            },
+            "operation": {
+              "label": "Operation Configuration",
+              "parameters": {
+                "operation_type": {
+                  "type": "select",
+                  "label": "Operation Type",
+                  "description": "Type of electrode manipulation",
+                  "options": [
+                    {
+                      "value": "pickup",
+                      "label": "Pick Up Electrode"
+                    },
+                    {
+                      "value": "insert",
+                      "label": "Insert into Cell"
+                    },
+                    {
+                      "value": "remove",
+                      "label": "Remove from Cell"
+                    },
+                    {
+                      "value": "return",
+                      "label": "Return to Rack"
+                    }
+                  ],
+                  "defaultValue": "pickup",
+                  "required": true
+                },
+                "electrode_type": {
+                  "type": "select",
+                  "label": "Electrode Type",
+                  "description": "Which electrode to manipulate",
+                  "options": [
+                    {
+                      "value": "working",
+                      "label": "Working Electrode (A1)"
+                    },
+                    {
+                      "value": "reference",
+                      "label": "Reference/Counter (A2)"
+                    },
+                    {
+                      "value": "flush_tool",
+                      "label": "Flush Tool (B1)"
+                    }
+                  ],
+                  "defaultValue": "reference",
+                  "required": true
+                },
+                "target_cell": {
+                  "type": "select",
+                  "label": "Target Cell",
+                  "description": "Reactor cell for electrode insertion",
+                  "options": [
+                    {
+                      "value": "A1",
+                      "label": "A1"
+                    },
+                    {
+                      "value": "A2",
+                      "label": "A2"
+                    },
+                    {
+                      "value": "A3",
+                      "label": "A3"
+                    },
+                    {
+                      "value": "A4",
+                      "label": "A4"
+                    },
+                    {
+                      "value": "A5",
+                      "label": "A5"
+                    },
+                    {
+                      "value": "B1",
+                      "label": "B1"
+                    },
+                    {
+                      "value": "B2",
+                      "label": "B2"
+                    },
+                    {
+                      "value": "B3",
+                      "label": "B3"
+                    },
+                    {
+                      "value": "B4",
+                      "label": "B4"
+                    },
+                    {
+                      "value": "B5",
+                      "label": "B5"
+                    },
+                    {
+                      "value": "C1",
+                      "label": "C1"
+                    },
+                    {
+                      "value": "C2",
+                      "label": "C2"
+                    },
+                    {
+                      "value": "C3",
+                      "label": "C3"
+                    },
+                    {
+                      "value": "C4",
+                      "label": "C4"
+                    },
+                    {
+                      "value": "C5",
+                      "label": "C5"
+                    }
+                  ],
+                  "defaultValue": "A1",
+                  "required": true,
+                  "dependsOn": {
+                    "parameter": "operation_type",
+                    "values": [
+                      "insert",
+                      "remove"
+                    ]
+                  }
+                }
+              }
+            },
+            "movement": {
+              "label": "Movement Parameters",
+              "parameters": {
+                "approach_speed": {
+                  "type": "number",
+                  "label": "Approach Speed",
+                  "description": "Speed for approaching positions",
+                  "defaultValue": 50,
+                  "min": 10,
+                  "max": 400,
+                  "step": 10,
+                  "unit": "mm/s"
+                },
+                "insertion_speed": {
+                  "type": "number",
+                  "label": "Insertion Speed",
+                  "description": "Speed for electrode insertion (slower for safety)",
+                  "defaultValue": 25,
+                  "min": 10,
+                  "max": 100,
+                  "step": 5,
+                  "unit": "mm/s"
+                }
+              }
+            },
+            "pickup_offsets": {
+              "label": "Pickup Position Offsets",
+              "parameters": {
+                "pickup_offset_x": {
+                  "type": "number",
+                  "label": "Pickup Offset X",
+                  "description": "X-axis offset for electrode pickup",
+                  "defaultValue": 0.6,
+                  "min": -2,
+                  "max": 2,
+                  "step": 0.1,
+                  "unit": "mm",
+                  "dependsOn": {
+                    "parameter": "operation_type",
+                    "values": [
+                      "pickup"
+                    ]
+                  }
+                },
+                "pickup_offset_y": {
+                  "type": "number",
+                  "label": "Pickup Offset Y",
+                  "description": "Y-axis offset for electrode pickup",
+                  "defaultValue": 0.5,
+                  "min": -2,
+                  "max": 2,
+                  "step": 0.1,
+                  "unit": "mm",
+                  "dependsOn": {
+                    "parameter": "operation_type",
+                    "values": [
+                      "pickup"
+                    ]
+                  }
+                },
+                "pickup_offset_z": {
+                  "type": "number",
+                  "label": "Pickup Offset Z",
+                  "description": "Z-axis offset for electrode pickup",
+                  "defaultValue": 3,
+                  "min": 0,
+                  "max": 10,
+                  "step": 0.5,
+                  "unit": "mm",
+                  "dependsOn": {
+                    "parameter": "operation_type",
+                    "values": [
+                      "pickup"
+                    ]
+                  }
+                }
+              }
+            },
+            "insertion_offsets": {
+              "label": "Insertion Position Offsets",
+              "parameters": {
+                "insert_offset_x": {
+                  "type": "number",
+                  "label": "Insert Offset X",
+                  "description": "X-axis offset for electrode insertion",
+                  "defaultValue": 0.5,
+                  "min": -2,
+                  "max": 2,
+                  "step": 0.1,
+                  "unit": "mm",
+                  "dependsOn": {
+                    "parameter": "operation_type",
+                    "values": [
+                      "insert"
+                    ]
+                  }
+                },
+                "insert_offset_y": {
+                  "type": "number",
+                  "label": "Insert Offset Y",
+                  "description": "Y-axis offset for electrode insertion",
+                  "defaultValue": 0.5,
+                  "min": -2,
+                  "max": 2,
+                  "step": 0.1,
+                  "unit": "mm",
+                  "dependsOn": {
+                    "parameter": "operation_type",
+                    "values": [
+                      "insert"
+                    ]
+                  }
+                },
+                "insert_approach_z": {
+                  "type": "number",
+                  "label": "Approach Height",
+                  "description": "Height above cell before insertion",
+                  "defaultValue": 5,
+                  "min": 0,
+                  "max": 20,
+                  "step": 1,
+                  "unit": "mm",
+                  "dependsOn": {
+                    "parameter": "operation_type",
+                    "values": [
+                      "insert"
+                    ]
+                  }
+                },
+                "insert_final_z": {
+                  "type": "number",
+                  "label": "Insertion Depth",
+                  "description": "Final electrode insertion depth (negative value)",
+                  "defaultValue": -26,
+                  "min": -60,
+                  "max": 0,
+                  "step": 1,
+                  "unit": "mm",
+                  "dependsOn": {
+                    "parameter": "operation_type",
+                    "values": [
+                      "insert"
+                    ]
+                  }
+                }
+              }
+            },
+            "return_offsets": {
+              "label": "Return Position Offsets",
+              "parameters": {
+                "return_offset_z": {
+                  "type": "number",
+                  "label": "Return Height",
+                  "description": "Z offset for safe electrode return",
+                  "defaultValue": 6,
+                  "min": 0,
+                  "max": 20,
+                  "step": 0.5,
+                  "unit": "mm",
+                  "dependsOn": {
+                    "parameter": "operation_type",
+                    "values": [
+                      "return"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "primitiveOperations": [
+            "move_to_electrode",
+            "pickup_electrode",
+            "move_to_cell",
+            "insert_electrode",
+            "remove_electrode",
+            "return_electrode"
+          ],
+          "executionSteps": []
+        },
+        "executionFlow": {
+          "connections": {
+            "predecessors": [
+              {
+                "sourceNodeId": "sdl1ElectrochemicalMeasurement_dndnode_17",
+                "sourceHandle": "sdl1ElectrochemicalMeasurement_dndnode_17-connection",
+                "targetHandle": "sdl1ElectrodeManipulation-1756397483835-target",
+                "connectionType": "custom",
+                "delay": 10,
+                "priority": 1
+              }
+            ],
+            "successors": [
+              {
+                "targetNodeId": "otflexElectrodeWash_dndnode_7",
+                "sourceHandle": "sdl1ElectrodeManipulation-1756397483835-connection",
+                "targetHandle": "otflexElectrodeWash_dndnode_7-target",
+                "connectionType": "custom",
+                "delay": 10,
+                "priority": 1
+              }
+            ]
+          },
+          "executionOrder": "dependent",
+          "parallelExecution": false,
+          "conditionalExecution": false
+        }
+      },
+      {
+        "id": "sdl1ElectrodeManipulation-1756397960166",
+        "type": "sdl1ElectrodeManipulation",
+        "label": "Electrode Manipulation",
+        "params": {
+          "uo_name": "Electrode_Manipulation",
+          "description": "Handle electrode pickup, insertion, and return operations",
+          "wait_before": 1,
+          "wait_after": 1,
+          "error_handling": "stop",
+          "log_level": "ERROR",
+          "operation_type": "return",
+          "electrode_type": "reference",
+          "target_cell": "A1",
+          "approach_speed": 50,
+          "insertion_speed": 25,
+          "pickup_offset_x": 0.6,
+          "pickup_offset_y": 0.5,
+          "pickup_offset_z": 3,
+          "insert_offset_x": 0.5,
+          "insert_offset_y": 0.5,
+          "insert_approach_z": 5,
+          "insert_final_z": -26,
+          "return_offset_z": 6
+        },
+        "preserveAsUO": true,
+        "metadata": {
+          "category": "SDL1",
+          "description": "Handle electrode pickup, insertion, removal, and return operations",
+          "parameterGroups": {
+            "common": {
+              "label": "Common Parameters",
+              "parameters": {
+                "uo_name": {
+                  "type": "string",
+                  "label": "UO Name",
+                  "description": "Custom name for this operation",
+                  "defaultValue": "Electrode_Manipulation",
+                  "required": false
+                },
+                "description": {
+                  "type": "string",
+                  "label": "Description",
+                  "description": "Operation description",
+                  "defaultValue": "Handle electrode pickup, insertion, and return operations",
+                  "required": false
+                },
+                "wait_before": {
+                  "type": "number",
+                  "label": "Wait Before",
+                  "description": "Wait time before execution",
+                  "defaultValue": 0,
+                  "min": 0,
+                  "max": 3600,
+                  "step": 1,
+                  "unit": "s"
+                },
+                "wait_after": {
+                  "type": "number",
+                  "label": "Wait After",
+                  "description": "Wait time after execution",
+                  "defaultValue": 0,
+                  "min": 0,
+                  "max": 3600,
+                  "step": 1,
+                  "unit": "s"
+                },
+                "error_handling": {
+                  "type": "select",
+                  "label": "Error Handling",
+                  "description": "How to handle errors",
+                  "options": [
+                    {
+                      "value": "continue",
+                      "label": "Continue"
+                    },
+                    {
+                      "value": "stop",
+                      "label": "Stop"
+                    },
+                    {
+                      "value": "retry",
+                      "label": "Retry"
+                    }
+                  ],
+                  "defaultValue": "stop",
+                  "required": true
+                },
+                "log_level": {
+                  "type": "select",
+                  "label": "Log Level",
+                  "description": "Logging level",
+                  "options": [
+                    {
+                      "value": "DEBUG",
+                      "label": "DEBUG"
+                    },
+                    {
+                      "value": "INFO",
+                      "label": "INFO"
+                    },
+                    {
+                      "value": "WARNING",
+                      "label": "WARNING"
+                    },
+                    {
+                      "value": "ERROR",
+                      "label": "ERROR"
+                    }
+                  ],
+                  "defaultValue": "INFO",
+                  "required": true
+                }
+              }
+            },
+            "operation": {
+              "label": "Operation Configuration",
+              "parameters": {
+                "operation_type": {
+                  "type": "select",
+                  "label": "Operation Type",
+                  "description": "Type of electrode manipulation",
+                  "options": [
+                    {
+                      "value": "pickup",
+                      "label": "Pick Up Electrode"
+                    },
+                    {
+                      "value": "insert",
+                      "label": "Insert into Cell"
+                    },
+                    {
+                      "value": "remove",
+                      "label": "Remove from Cell"
+                    },
+                    {
+                      "value": "return",
+                      "label": "Return to Rack"
+                    }
+                  ],
+                  "defaultValue": "pickup",
+                  "required": true
+                },
+                "electrode_type": {
+                  "type": "select",
+                  "label": "Electrode Type",
+                  "description": "Which electrode to manipulate",
+                  "options": [
+                    {
+                      "value": "working",
+                      "label": "Working Electrode (A1)"
+                    },
+                    {
+                      "value": "reference",
+                      "label": "Reference/Counter (A2)"
+                    },
+                    {
+                      "value": "flush_tool",
+                      "label": "Flush Tool (B1)"
+                    }
+                  ],
+                  "defaultValue": "reference",
+                  "required": true
+                },
+                "target_cell": {
+                  "type": "select",
+                  "label": "Target Cell",
+                  "description": "Reactor cell for electrode insertion",
+                  "options": [
+                    {
+                      "value": "A1",
+                      "label": "A1"
+                    },
+                    {
+                      "value": "A2",
+                      "label": "A2"
+                    },
+                    {
+                      "value": "A3",
+                      "label": "A3"
+                    },
+                    {
+                      "value": "A4",
+                      "label": "A4"
+                    },
+                    {
+                      "value": "A5",
+                      "label": "A5"
+                    },
+                    {
+                      "value": "B1",
+                      "label": "B1"
+                    },
+                    {
+                      "value": "B2",
+                      "label": "B2"
+                    },
+                    {
+                      "value": "B3",
+                      "label": "B3"
+                    },
+                    {
+                      "value": "B4",
+                      "label": "B4"
+                    },
+                    {
+                      "value": "B5",
+                      "label": "B5"
+                    },
+                    {
+                      "value": "C1",
+                      "label": "C1"
+                    },
+                    {
+                      "value": "C2",
+                      "label": "C2"
+                    },
+                    {
+                      "value": "C3",
+                      "label": "C3"
+                    },
+                    {
+                      "value": "C4",
+                      "label": "C4"
+                    },
+                    {
+                      "value": "C5",
+                      "label": "C5"
+                    }
+                  ],
+                  "defaultValue": "A1",
+                  "required": true,
+                  "dependsOn": {
+                    "parameter": "operation_type",
+                    "values": [
+                      "insert",
+                      "remove"
+                    ]
+                  }
+                }
+              }
+            },
+            "movement": {
+              "label": "Movement Parameters",
+              "parameters": {
+                "approach_speed": {
+                  "type": "number",
+                  "label": "Approach Speed",
+                  "description": "Speed for approaching positions",
+                  "defaultValue": 50,
+                  "min": 10,
+                  "max": 400,
+                  "step": 10,
+                  "unit": "mm/s"
+                },
+                "insertion_speed": {
+                  "type": "number",
+                  "label": "Insertion Speed",
+                  "description": "Speed for electrode insertion (slower for safety)",
+                  "defaultValue": 25,
+                  "min": 10,
+                  "max": 100,
+                  "step": 5,
+                  "unit": "mm/s"
+                }
+              }
+            },
+            "pickup_offsets": {
+              "label": "Pickup Position Offsets",
+              "parameters": {
+                "pickup_offset_x": {
+                  "type": "number",
+                  "label": "Pickup Offset X",
+                  "description": "X-axis offset for electrode pickup",
+                  "defaultValue": 0.6,
+                  "min": -2,
+                  "max": 2,
+                  "step": 0.1,
+                  "unit": "mm",
+                  "dependsOn": {
+                    "parameter": "operation_type",
+                    "values": [
+                      "pickup"
+                    ]
+                  }
+                },
+                "pickup_offset_y": {
+                  "type": "number",
+                  "label": "Pickup Offset Y",
+                  "description": "Y-axis offset for electrode pickup",
+                  "defaultValue": 0.5,
+                  "min": -2,
+                  "max": 2,
+                  "step": 0.1,
+                  "unit": "mm",
+                  "dependsOn": {
+                    "parameter": "operation_type",
+                    "values": [
+                      "pickup"
+                    ]
+                  }
+                },
+                "pickup_offset_z": {
+                  "type": "number",
+                  "label": "Pickup Offset Z",
+                  "description": "Z-axis offset for electrode pickup",
+                  "defaultValue": 3,
+                  "min": 0,
+                  "max": 10,
+                  "step": 0.5,
+                  "unit": "mm",
+                  "dependsOn": {
+                    "parameter": "operation_type",
+                    "values": [
+                      "pickup"
+                    ]
+                  }
+                }
+              }
+            },
+            "insertion_offsets": {
+              "label": "Insertion Position Offsets",
+              "parameters": {
+                "insert_offset_x": {
+                  "type": "number",
+                  "label": "Insert Offset X",
+                  "description": "X-axis offset for electrode insertion",
+                  "defaultValue": 0.5,
+                  "min": -2,
+                  "max": 2,
+                  "step": 0.1,
+                  "unit": "mm",
+                  "dependsOn": {
+                    "parameter": "operation_type",
+                    "values": [
+                      "insert"
+                    ]
+                  }
+                },
+                "insert_offset_y": {
+                  "type": "number",
+                  "label": "Insert Offset Y",
+                  "description": "Y-axis offset for electrode insertion",
+                  "defaultValue": 0.5,
+                  "min": -2,
+                  "max": 2,
+                  "step": 0.1,
+                  "unit": "mm",
+                  "dependsOn": {
+                    "parameter": "operation_type",
+                    "values": [
+                      "insert"
+                    ]
+                  }
+                },
+                "insert_approach_z": {
+                  "type": "number",
+                  "label": "Approach Height",
+                  "description": "Height above cell before insertion",
+                  "defaultValue": 5,
+                  "min": 0,
+                  "max": 20,
+                  "step": 1,
+                  "unit": "mm",
+                  "dependsOn": {
+                    "parameter": "operation_type",
+                    "values": [
+                      "insert"
+                    ]
+                  }
+                },
+                "insert_final_z": {
+                  "type": "number",
+                  "label": "Insertion Depth",
+                  "description": "Final electrode insertion depth (negative value)",
+                  "defaultValue": -26,
+                  "min": -60,
+                  "max": 0,
+                  "step": 1,
+                  "unit": "mm",
+                  "dependsOn": {
+                    "parameter": "operation_type",
+                    "values": [
+                      "insert"
+                    ]
+                  }
+                }
+              }
+            },
+            "return_offsets": {
+              "label": "Return Position Offsets",
+              "parameters": {
+                "return_offset_z": {
+                  "type": "number",
+                  "label": "Return Height",
+                  "description": "Z offset for safe electrode return",
+                  "defaultValue": 6,
+                  "min": 0,
+                  "max": 20,
+                  "step": 0.5,
+                  "unit": "mm",
+                  "dependsOn": {
+                    "parameter": "operation_type",
+                    "values": [
+                      "return"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "primitiveOperations": [
+            "move_to_electrode",
+            "pickup_electrode",
+            "move_to_cell",
+            "insert_electrode",
+            "remove_electrode",
+            "return_electrode"
+          ],
+          "executionSteps": []
+        },
+        "executionFlow": {
+          "connections": {
+            "predecessors": [
+              {
+                "sourceNodeId": "otflexElectrodeWash_dndnode_7",
+                "sourceHandle": "otflexElectrodeWash_dndnode_7-connection",
+                "targetHandle": "sdl1ElectrodeManipulation-1756397960166-target",
+                "connectionType": "custom",
+                "delay": 10,
+                "priority": 1
+              }
+            ],
+            "successors": [
+              {
+                "targetNodeId": "otflexArduinoPump_dndnode_10",
+                "sourceHandle": "sdl1ElectrodeManipulation-1756397960166-connection",
+                "targetHandle": "otflexArduinoPump_dndnode_10-target",
+                "connectionType": "custom",
+                "delay": 10,
+                "priority": 1
+              }
+            ]
+          },
+          "executionOrder": "dependent",
+          "parallelExecution": false,
+          "conditionalExecution": false
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "reactflow__edge-otflexArduinoElectrode_dndnode_13otflexArduinoElectrode_dndnode_13-connection-sdl1ElectrodeManipulation_dndnode_18sdl1ElectrodeManipulation_dndnode_18-target",
+        "source": "otflexArduinoElectrode_dndnode_13",
+        "target": "sdl1ElectrodeManipulation_dndnode_18",
+        "sourceHandle": "otflexArduinoElectrode_dndnode_13-connection",
+        "targetHandle": "sdl1ElectrodeManipulation_dndnode_18-target",
+        "type": "custom",
+        "data": {
+          "sourceNodeType": "otflexArduinoElectrode",
+          "sourceHandleId": "otflexArduinoElectrode_dndnode_13-connection",
+          "mode": "sequential",
+          "delay": 100,
+          "retries": 3
+        },
+        "label": "Sequential (Delay: 100ms) (Retries: 3retries)",
+        "animated": false,
+        "style": {}
+      },
+      {
+        "id": "reactflow__edge-sdl1ElectrodeManipulation_dndnode_18sdl1ElectrodeManipulation_dndnode_18-connection-sdl1ElectrodeSetup_dndnode_21sdl1ElectrodeSetup_dndnode_21-target",
+        "source": "sdl1ElectrodeManipulation_dndnode_18",
+        "target": "sdl1ElectrodeSetup_dndnode_21",
+        "sourceHandle": "sdl1ElectrodeManipulation_dndnode_18-connection",
+        "targetHandle": "sdl1ElectrodeSetup_dndnode_21-target",
+        "type": "custom",
+        "data": {
+          "sourceNodeType": "sdl1ElectrodeManipulation",
+          "sourceHandleId": "sdl1ElectrodeManipulation_dndnode_18-connection",
+          "mode": "sequential",
+          "delay": 100,
+          "retries": 3
+        },
+        "label": "Sequential (Delay: 100ms) (Retries: 3retries)",
+        "animated": false,
+        "style": {}
+      },
+      
+      {
+        "id": "reactflow__edge-1-otflexGripper_dndnode_1otflexGripper_dndnode_1-target",
+        "source": "1",
+        "target": "otflexGripper_dndnode_1",
+        "sourceHandle": null,
+        "targetHandle": "otflexGripper_dndnode_1-target",
+        "type": "custom",
+        "data": {
+          "sourceNodeType": "input",
+          "sourceHandleId": null,
+          "mode": "sequential"
+        },
+        "label": "Sequential",
+        "animated": false,
+        "style": {
+          "stroke": "#888888"
+        }
+      },
+      {
+        "id": "reactflow__edge-otflexGripper_to_otflexReactor",
+        "source": "otflexGripper_dndnode_1",
+        "target": "otflexArduinoReactor-1756397257870",
+        "sourceHandle": "otflexGripper_dndnode_1-connection",
+        "targetHandle": "otflexArduinoReactor-1756397257870-target",
+        "type": "custom",
+        "data": {
+          "sourceNodeType": "otflexGripper",
+          "sourceHandleId": "otflexGripper_dndnode_1-connection",
+          "mode": "sequential"
+        },
+        "label": "Sequential",
+        "animated": false,
+        "style": {}
+      },
+      {
+        "id": "reactflow__edge-otflexReactor_to_myxArmPosition",
+        "source": "otflexArduinoReactor-1756397257870",
+        "target": "otflexMyxArmPosition_dndnode_11",
+        "sourceHandle": "otflexArduinoReactor-1756397257870-connection",
+        "targetHandle": "otflexMyxArmPosition_dndnode_11-target",
+        "type": "custom",
+        "data": {
+          "sourceNodeType": "otflexArduinoReactor",
+          "sourceHandleId": "otflexArduinoReactor-1756397257870-connection",
+          "mode": "sequential"
+        },
+        "label": "Sequential",
+        "animated": false,
+        "style": {}
+      },
+      {
+        "id": "reactflow__edge-otflexMyxArmPosition_dndnode_11otflexMyxArmPosition_dndnode_11-connection-otflexMyxArmGripper_dndnode_12otflexMyxArmGripper_dndnode_12-target",
+        "source": "otflexMyxArmPosition_dndnode_11",
+        "target": "otflexMyxArmGripper_dndnode_12",
+        "sourceHandle": "otflexMyxArmPosition_dndnode_11-connection",
+        "targetHandle": "otflexMyxArmGripper_dndnode_12-target",
+        "type": "custom",
+        "data": {
+          "sourceNodeType": "otflexMyxArmPosition",
+          "sourceHandleId": "otflexMyxArmPosition_dndnode_11-connection",
+          "mode": "sequential",
+          "delay": 10,
+          "retries": 3
+        },
+        "label": "Sequential (Delay: 10ms) (Retries: 3retries)",
+        "animated": false,
+        "style": {}
+      },
+      {
+        "id": "reactflow__edge-otflexMyxArmGripper_dndnode_12otflexMyxArmGripper_dndnode_12-connection-otflexMyxArmPosition-1756394925871otflexMyxArmPosition-1756394925871-target",
+        "source": "otflexMyxArmGripper_dndnode_12",
+        "target": "otflexMyxArmPosition-1756394925871",
+        "sourceHandle": "otflexMyxArmGripper_dndnode_12-connection",
+        "targetHandle": "otflexMyxArmPosition-1756394925871-target",
+        "type": "custom",
+        "data": {
+          "sourceNodeType": "otflexMyxArmGripper",
+          "sourceHandleId": "otflexMyxArmGripper_dndnode_12-connection",
+          "mode": "sequential",
+          "delay": 10,
+          "retries": 3
+        },
+        "label": "Sequential (Delay: 10ms) (Retries: 3retries)",
+        "animated": false,
+        "style": {}
+      },
+      {
+        "id": "reactflow__edge-otflexMyxArmPosition-1756394925871otflexMyxArmPosition-1756394925871-connection-otflexMyxArmGripper-1756396945311otflexMyxArmGripper-1756396945311-target",
+        "source": "otflexMyxArmPosition-1756394925871",
+        "target": "otflexMyxArmGripper-1756396945311",
+        "sourceHandle": "otflexMyxArmPosition-1756394925871-connection",
+        "targetHandle": "otflexMyxArmGripper-1756396945311-target",
+        "type": "custom",
+        "data": {
+          "sourceNodeType": "otflexMyxArmPosition",
+          "sourceHandleId": "otflexMyxArmPosition-1756394925871-connection",
+          "mode": "sequential",
+          "delay": 10,
+          "retries": 3
+        },
+        "label": "Sequential (Delay: 10ms) (Retries: 3retries)",
+        "animated": false,
+        "style": {}
+      },
+      {
+        "id": "reactflow__edge-otflexArduinoReactor-1756397257870_seq_otflexTransfer_dndnode_2",
+        "source": "otflexArduinoReactor-1756397257870",
+        "target": "otflexTransfer_dndnode_2",
+        "sourceHandle": "otflexArduinoReactor-1756397257870-connection",
+        "targetHandle": "otflexTransfer_dndnode_2-target",
+        "type": "custom",
+        "data": {
+          "sourceNodeType": "otflexArduinoReactor",
+          "sourceHandleId": "otflexArduinoReactor-1756397257870-connection",
+          "mode": "sequential"
+        },
+        "label": "Sequential",
+        "animated": false,
+        "style": {}
+      },
+      {
+        "id": "reactflow__edge-otflexTransfer_seq_otflexArduinoElectrode_dndnode_13",
+        "source": "otflexTransfer_dndnode_2",
+        "target": "otflexArduinoElectrode_dndnode_13",
+        "sourceHandle": "otflexTransfer_dndnode_2-connection",
+        "targetHandle": "otflexArduinoElectrode_dndnode_13-target",
+        "type": "custom",
+        "data": {
+          "sourceNodeType": "otflexTransfer",
+          "sourceHandleId": "otflexTransfer_dndnode_2-connection",
+          "mode": "sequential"
+        },
+        "label": "Sequential",
+        "animated": false,
+        "style": {}
+      },
+      {
+        "id": "reactflow__edge-sdl1ElectrodeSetup_dndnode_21sdl1ElectrodeSetup_dndnode_21-connection-sdl1ElectrochemicalMeasurement_dndnode_17sdl1ElectrochemicalMeasurement_dndnode_17-target",
+        "source": "sdl1ElectrodeSetup_dndnode_21",
+        "target": "sdl1ElectrochemicalMeasurement_dndnode_17",
+        "sourceHandle": "sdl1ElectrodeSetup_dndnode_21-connection",
+        "targetHandle": "sdl1ElectrochemicalMeasurement_dndnode_17-target",
+        "type": "custom",
+        "data": {
+          "sourceNodeType": "sdl1ElectrodeSetup",
+          "sourceHandleId": "sdl1ElectrodeSetup_dndnode_21-connection",
+          "mode": "sequential",
+          "delay": 10,
+          "retries": 3
+        },
+        "label": "Sequential (Delay: 10ms) (Retries: 3retries)",
+        "animated": false,
+        "style": {}
+      },
+      {
+        "id": "reactflow__edge-sdl1ElectrochemicalMeasurement_dndnode_17sdl1ElectrochemicalMeasurement_dndnode_17-connection-sdl1ElectrodeManipulation-1756397483835sdl1ElectrodeManipulation-1756397483835-target",
+        "source": "sdl1ElectrochemicalMeasurement_dndnode_17",
+        "target": "sdl1ElectrodeManipulation-1756397483835",
+        "sourceHandle": "sdl1ElectrochemicalMeasurement_dndnode_17-connection",
+        "targetHandle": "sdl1ElectrodeManipulation-1756397483835-target",
+        "type": "custom",
+        "data": {
+          "sourceNodeType": "sdl1ElectrochemicalMeasurement",
+          "sourceHandleId": "sdl1ElectrochemicalMeasurement_dndnode_17-connection",
+          "mode": "sequential",
+          "delay": 10,
+          "retries": 3
+        },
+        "label": "Sequential (Delay: 10ms) (Retries: 3retries)",
+        "animated": false,
+        "style": {}
+      },
+      {
+        "id": "reactflow__edge-sdl1ElectrodeManipulation-1756397483835sdl1ElectrodeManipulation-1756397483835-connection-otflexElectrodeWash_dndnode_7otflexElectrodeWash_dndnode_7-target",
+        "source": "sdl1ElectrodeManipulation-1756397483835",
+        "target": "otflexElectrodeWash_dndnode_7",
+        "sourceHandle": "sdl1ElectrodeManipulation-1756397483835-connection",
+        "targetHandle": "otflexElectrodeWash_dndnode_7-target",
+        "type": "custom",
+        "data": {
+          "sourceNodeType": "sdl1ElectrodeManipulation",
+          "sourceHandleId": "sdl1ElectrodeManipulation-1756397483835-connection",
+          "mode": "sequential",
+          "delay": 10,
+          "retries": 3
+        },
+        "label": "Sequential (Delay: 10ms) (Retries: 3retries)",
+        "animated": false,
+        "style": {}
+      },
+      {
+        "id": "reactflow__edge-otflexElectrodeWash_dndnode_7otflexElectrodeWash_dndnode_7-connection-sdl1ElectrodeManipulation-1756397960166sdl1ElectrodeManipulation-1756397960166-target",
+        "source": "otflexElectrodeWash_dndnode_7",
+        "target": "sdl1ElectrodeManipulation-1756397960166",
+        "sourceHandle": "otflexElectrodeWash_dndnode_7-connection",
+        "targetHandle": "sdl1ElectrodeManipulation-1756397960166-target",
+        "type": "custom",
+        "data": {
+          "sourceNodeType": "otflexElectrodeWash",
+          "sourceHandleId": "otflexElectrodeWash_dndnode_7-connection",
+          "mode": "sequential",
+          "delay": 10,
+          "retries": 3
+        },
+        "label": "Sequential (Delay: 10ms) (Retries: 3retries)",
+        "animated": false,
+        "style": {}
+      },
+      {
+        "id": "reactflow__edge-sdl1ElectrodeManipulation-1756397960166sdl1ElectrodeManipulation-1756397960166-connection-otflexArduinoPump_dndnode_10otflexArduinoPump_dndnode_10-target",
+        "source": "sdl1ElectrodeManipulation-1756397960166",
+        "target": "otflexArduinoPump_dndnode_10",
+        "sourceHandle": "sdl1ElectrodeManipulation-1756397960166-connection",
+        "targetHandle": "otflexArduinoPump_dndnode_10-target",
+        "type": "custom",
+        "data": {
+          "sourceNodeType": "sdl1ElectrodeManipulation",
+          "sourceHandleId": "sdl1ElectrodeManipulation-1756397960166-connection",
+          "mode": "sequential",
+          "delay": 10,
+          "retries": 3
+        },
+        "label": "Sequential (Delay: 10ms) (Retries: 3retries)",
+        "animated": false,
+        "style": {}
+      },
+      {
+        "id": "reactflow__edge-otflexArduinoPump_dndnode_10otflexArduinoPump_dndnode_10-connection-otflexArduinoFurnace_dndnode_6otflexArduinoFurnace_dndnode_6-target",
+        "source": "otflexArduinoPump_dndnode_10",
+        "target": "otflexArduinoFurnace_dndnode_6",
+        "sourceHandle": "otflexArduinoPump_dndnode_10-connection",
+        "targetHandle": "otflexArduinoFurnace_dndnode_6-target",
+        "type": "custom",
+        "data": {
+          "sourceNodeType": "otflexArduinoPump",
+          "sourceHandleId": "otflexArduinoPump_dndnode_10-connection",
+          "mode": "sequential",
+          "delay": 10,
+          "retries": 3
+        },
+        "label": "Sequential (Delay: 10ms) (Retries: 3retries)",
+        "animated": false,
+        "style": {}
+      },
+      {
+        "id": "reactflow__edge-otflexGripper_dndnode_1otflexGripper_dndnode_1-connection-otflexArduinoReactor-1756397257870otflexArduinoReactor-1756397257870-target",
+        "source": "otflexGripper_dndnode_1",
+        "target": "otflexArduinoReactor-1756397257870",
+        "sourceHandle": "otflexGripper_dndnode_1-connection",
+        "targetHandle": "otflexArduinoReactor-1756397257870-target",
+        "type": "custom",
+        "data": {
+          "sourceNodeType": "otflexGripper",
+          "sourceHandleId": "otflexGripper_dndnode_1-connection",
+          "mode": "sequential",
+          "delay": 10,
+          "retries": 3
+        },
+        "label": "Sequential (Delay: 10ms) (Retries: 3retries)",
+        "animated": false,
+        "style": {}
+      }
+    ],
+    "executionMetadata": {
+      "edgeAnalysis": {
+        "totalEdges": 16,
+        "edgeTypes": {
+          "sequential": 14,
+          "parallel": 2,
+          "conditional": 0,
+          "internal": 0
+        },
+        "executionPaths": 17,
+        "hasParallelExecution": false,
+        "hasConditionalFlow": false,
+        "executionComplexity": "mixed"
+      },
+      "suggestedExecutionOrder": [
+        "1",
+        "otflexGripper_dndnode_1",
+        "otflexArduinoReactor-1756397257870",
+        "otflexTransfer_dndnode_2",
+        "otflexArduinoElectrode_dndnode_13",
+        "sdl1ElectrodeManipulation_dndnode_18",
+        "sdl1ElectrodeSetup_dndnode_21",
+        "sdl1ElectrochemicalMeasurement_dndnode_17",
+        "sdl1ElectrodeManipulation-1756397483835",
+        "otflexElectrodeWash_dndnode_7",
+        "sdl1ElectrodeManipulation-1756397960166",
+        "otflexArduinoPump_dndnode_10",
+        "otflexArduinoFurnace_dndnode_6",
+        "otflexMyxArmPosition_dndnode_11",
+        "otflexMyxArmGripper_dndnode_12",
+        "otflexMyxArmPosition-1756394925871",
+        "otflexMyxArmGripper-1756396945311"
+      ],
+      "executionComplexity": "sequential",
+      "estimatedDuration": 510,
+      "exportTimestamp": "2025-08-28T16:27:07.803Z",
+      "exportVersion": "1.1",
+      "hasParallelExecution": true
+    }
+  },
+  "devices": {
+    "otflex": {
+      "module": "otflex_runtime.py",
+      "controller_ip": "169.254.179.32",
+      "model": "Opentrons Flex",
+      "opentrons_api": "flex-robot-server",
+      "arduino": {
+        "port": "COM4",
+        "baudrate": 115200
+      },
+      "deck": {
+        "slots": {
+          "A1": { "name": "electrode_module",            "display": "electrode_station",             "labware": "custom_electrode_holder" },
+          "A2": { "name": "parallel_electrode_module",   "display": "parallel_electrode_station",    "labware": "custom_parallel_electrode_station" },
+          "A3": { "name": "trash",                      "display": "trash (drop tips)",            "labware": "opentrons_flex_trash" },
+
+          "B1": { "name": "auto_reactor",               "display": "auto_reactor",                  "labware": "custom_auto_reactor" },
+          "B2": { "name": "source_plate",               "display": "precursor_vials",               "labware": "nest_12_reservoir_15ml" },
+          "B3": { "name": "reactor_plate",              "display": "reactor",                       "labware": "corning_96_wellplate_360ul_flat" },
+
+          "C1": { "name": "tiprack_50ul",               "display": "tiprack_50ul",                  "labware": "opentrons_flex_96_tiprack_50ul" },
+          "C2": { "name": "vial_cap_storage",           "display": "vial_cap_storage",              "labware": "custom_vial_cap_holder" },
+          "C3": { "name": "tiprack_1000ul",             "display": "tiprack_1000ul",                "labware": "opentrons_flex_96_tiprack_1000ul" },
+
+          "D1": { "name": "substrate_storage",          "display": "substrate_storage",             "labware": "custom_substrate_storage" },
+          "D2": { "name": "ph_meter",                   "display": "ph_meter",                      "labware": "custom_ph_meter_holder" },
+          "D3": { "name": "heater_shaker",              "display": "heater_shaker",                 "labware": "custom_heater_shaker" }
+        },
+        "pipettes": {
+          "left": {
+            "model": "flex_1channel_50",
+            "mount": "left"
+          },
+          "right": {
+            "model": "flex_gripper",
+            "mount": "right"
+          }
+        }
+      }
+    },
+    "arduino": {
+      "port": "/dev/ttyACM0",
+      "baudrate": 115200,
+      "basePlates": [
+        0,
+        1
+      ],
+      "nozzlePumps": [
+        0,
+        1,
+        2
+      ],
+      "rinsePumps": [
+        3,
+        5,
+        4
+      ],
+      "ultrasonicRelays": [
+        6,
+        7
+      ],
+      "tempSensors": [
+        0,
+        1
+      ],
+      "heaterRelays": [
+        2,
+        3
+      ]
+    },
+    "arm": {
+      "module": "myxArm_Utils.py",
+      "ip": "192.168.1.207",
+      "model": "UFactory xArm6",
+      "tool": "rg2_gripper",
+      "default": {
+        "speed": 100,
+        "accel": 200,
+        "blend": 0
+      }
+    },
+    "potentiostat": {
+      "model": "Biologic",
+      "com_port": "COM8",
+      "channel": 1
+    }
+  },
+  "frames": {
+    "world": {
+      "type": "base"
+    },
+    "ot_deck": {
+      "type": "rect",
+      "origin": [
+        0,
+        0,
+        0
+      ],
+      "parent": "world"
+    },
+    "arm_base": {
+      "type": "base",
+      "origin": [
+        -400,
+        -200,
+        0
+      ],
+      "parent": "world"
+    },
+    "tool": {
+      "type": "tcp",
+      "offset": [
+        0,
+        0,
+        140,
+        0,
+        0,
+        0
+      ],
+      "parent": "arm_base"
+    }
+  },
+  "calibrations": {
+    "handeye": {
+      "type": "eye_to_hand",
+      "arm_in_world": [
+        -400,
+        -200,
+        0,
+        0,
+        0,
+        0
+      ],
+      "deck_in_world": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "electrode_holder_offset": {
+      "xyz": [
+        0,
+        0,
+        15
+      ],
+      "rpy": [
+        0,
+        0,
+        0
+      ]
+    }
+  },
+  "resources": {
+    "locks": [
+      "deck:slot3",
+      "deck:slot4",
+      "wash:station1",
+      "furnace:chamber1"
+    ]
+  }
+}

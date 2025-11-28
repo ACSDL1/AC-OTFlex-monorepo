@@ -1,0 +1,430 @@
+{
+  "name": "Complete Workflow Test",
+  "description": "Minimal workflow to test liquid transfer functionality",
+  "version": "1.0.0",
+  "author": "Test",
+  "created": "2024-01-01",
+  "workflow": {
+    "nodes": [
+      {
+        "id": "1",
+        "type": "input",
+        "label": "Start Node",
+        "params": {}
+      },
+      {
+        "id": "gripper_close_home",
+        "type": "otflexGripper",
+        "label": "Ensure gripper closed at home",
+        "params": {
+          "action": "close"
+        }
+      },
+      {
+        "id": "gripper_pickplace_c2",
+        "type": "otflexGripper",
+        "label": "Pick at B2, place at C2",
+        "params": {
+          "action": "pick_and_place",
+          "from_slot": "B2",
+          "to_slot": "C2",
+          "ensure_open": true,
+          "close_after_release": true,
+          "home_after": false
+        }
+      },
+      {
+        "id": "liquid_transfer_to_reactor",
+        "type": "otflexTransfer",
+        "label": "Liquid Transfer to Reactor",
+        "params": {
+          "from": {
+            "labware": "source_plate",
+            "well": "A2",
+            "offsetX": 0,
+            "offsetY": 0,
+            "offsetZ": 2
+          },
+          "to": {
+            "labware": "destination_plate",
+            "well": [
+              "A1"
+            ],
+            "offsetX": 0,
+            "offsetY": 0,
+            "offsetZ": 20
+          },
+          "action": "liquid",
+          "volume_uL": 100,
+          "move_speed": 120,
+          "pipette": "p1000_single_flex",
+          "tiprack": "tiprack_1000ul"
+        }
+      },
+      { 
+        "id": "otflexFlushWell",
+        "type": "otflexFlushWell",
+        "params": {
+          "from": {
+            "labware": "single_electrode_module",
+            "well": "A2"
+          },
+          "to": {
+            "labware": "actuated_reactor",
+            "well": [
+              "A1"
+            ]
+          },
+          "pipette": "p1000_single_flex",
+          "repeats": 1,
+          "time_ms": 5000, 
+          "home_after": true
+        }
+      },
+      { 
+        "id": "otflexPotentExperiment",
+        "type": "otflexPotentExperiment",
+        "params": {
+          "from": {
+            "labware": "parallel_electrode_module",
+            "well": "A2",
+            "offsetX": 0.5,
+            "offsetY": 1.0,
+            "offsetZ": 0.0
+          },
+          "to": {
+            "labware": "actuated_reactor",
+            "well": "A1",
+            "offsetX": -3.5,
+            "offsetY": -34.5,
+            "offsetZ": 20.0
+          },
+          "drop_tip_after": true,
+          "pipette": "p1000_single_flex",
+          "data_folder": "C:\\Users\\sdl1_\\Echem",
+          "potentiostat_configs": [
+            {
+              "com_port": "COM10",
+              "row": "A",
+              "file_name": "A1_mp_np"
+            },
+            {
+              "com_port": "COM12",
+              "row": "B",
+              "file_name": "B1_mp_np"
+            },
+            {
+              "com_port": "COM11",
+              "row": "C",
+              "file_name": "C1_mp_np"
+            },
+            {
+              "com_port": "COM7",
+              "row": "D",
+              "file_name": "D1_mp_np"
+            }
+          ],
+          "cv_params": {
+            "min_V": -2.3,
+            "max_V": -2.5,
+            "cycles": 100,
+            "mV_s": 200,
+            "step_hz": 1000
+          }
+        }
+      },
+      {
+        "id": "xarm_place_plate_to_reactor",
+        "type": "otflexmyxarmRun",
+        "label": "Place Plate to Reactor",
+        "params": {
+          "sequence": "placePlateToReactor"
+        }
+      },
+      {
+        "id": "xarm_reactor_to_furnace",
+        "type": "otflexmyxarmRun",
+        "label": "Reactor to Furnace",
+        "params": {
+          "sequence": "reactorToFurnace"
+        }
+      },
+      {
+        "id": "xarm_furnace_to_reactor",
+        "type": "otflexmyxarmRun",
+        "label": "Furnace to Reactor",
+        "params": {
+          "sequence": "furnaceToReactor"
+        }
+      },
+      {
+        "id": "turn_on_reactor",
+        "type": "otflexReactor",
+        "label": "Turn On Reactor",
+        "params": {
+          "state": "on"
+        }
+      },
+      {
+        "id": "turn_off_reactor",
+        "type": "otflexReactor",
+        "label": "Turn On Reactor",
+        "params": {
+          "state": "off"
+        }
+      },
+      {
+        "id": "open_furnace_before",
+        "type": "otflexFurnace",
+        "label": "Open Furnace",
+        "params": {
+          "open": true
+        }
+      },
+      {
+        "id": "close_furnace_before",
+        "type": "otflexFurnace",
+        "label": "Close Furnace",
+        "params": {
+          "open": false
+        }
+      },
+      {
+        "id": "open_furnace_after",
+        "type": "otflexFurnace",
+        "label": "Open Furnace",
+        "params": {
+          "open": true
+        }
+      },
+      {
+        "id": "close_furnace_after",
+        "type": "otflexFurnace",
+        "label": "Close Furnace",
+        "params": {
+          "open": false
+        }
+      },
+      {
+        "id": "output",
+        "type": "output",
+        "label": "End Node",
+        "params": {}
+      }
+    ],
+    "edges": [
+      {
+        "id": "start-to-close",
+        "source": "1",
+        "target": "gripper_close_home",
+        "type": "default"
+      },
+      {
+        "id": "close-to-c2",
+        "source": "gripper_close_home",
+        "target": "gripper_pickplace_c2",
+        "type": "default",
+        "mode": "parallel"
+      },
+      {
+        "id": "c2-to-transfer",
+        "source": "gripper_close_home",
+        "target": "xarm_place_plate_to_reactor",
+        "type": "default",
+        "mode": "parallel"
+      },
+      {
+        "id": "move-to-grip",
+        "source": "xarm_place_plate_to_reactor",
+        "target": "turn_on_reactor",
+        "type": "default"
+      }, 
+      {
+        "id": "transfer-to-flush",
+        "source": "turn_on_reactor",
+        "target": "liquid_transfer_to_reactor",
+        "type": "default"
+      },
+      {
+        "id": "transfer-to-flush",
+        "source": "liquid_transfer_to_reactor",
+        "target": "otflexPotentExperiment",
+        "type": "default"
+      },
+      {
+        "id": "flush-to-output",
+        "source": "otflexPotentExperiment",
+        "target": "otflexFlushWell",
+        "type": "default", 
+        "mode": "parallel"
+      }, 
+      {
+        "id": "flush-to-output",
+        "source": "otflexFlushWell",
+        "target": "turn_off_reactor",
+        "type": "default",
+        "mode": "parallel"
+      }, 
+      {
+        "id": "flush-to-output",
+        "source": "otflexFlushWell",
+        "target": "open_furnace_before",
+        "type": "default"
+      }, 
+      {
+        "id": "flush-to-output",
+        "source": "open_furnace_before",
+        "target": "xarm_reactor_to_furnace",
+        "type": "default"
+      }, 
+      {
+        "id": "flush-to-output",
+        "source": "xarm_reactor_to_furnace",
+        "target": "close_furnace_before",
+        "type": "default"
+      }, 
+      {
+        "id": "flush-to-output",
+        "source": "close_furnace_before",
+        "target": "open_furnace_after",
+        "type": "default"
+      },
+      {
+        "id": "flush-to-output",
+        "source": "open_furnace_after",
+        "target": "xarm_furnace_to_reactor",
+        "type": "default"
+      },
+      {
+        "id": "flush-to-output",
+        "source": "xarm_furnace_to_reactor",
+        "target": "close_furnace_after",
+        "type": "default"
+      },
+      {
+        "id": "flush-to-output",
+        "source": "close_furnace_after",
+        "target": "output",
+        "type": "default"
+      }
+    ],
+    "executionMetadata": {
+      "suggestedExecutionOrder": [
+        "1",
+        "gripper_close_home",
+        "gripper_pickplace_c2",
+        "xarm_place_plate_to_reactor",
+        "turn_on_reactor",
+        "liquid_transfer_to_reactor",
+        "otflexPotentExperiment",
+        "otflexFlushWell",
+        "turn_off_reactor",
+        "open_furnace_before",
+        "xarm_reactor_to_furnace",
+        "close_furnace_before",
+        "open_furnace_after",
+        "xarm_furnace_to_reactor",
+        "close_furnace_after",
+        "output"
+      ]
+    }
+  },
+  "devices": {
+    "otflex": {
+      "module": "otflex_runtime.py",
+      "opentrons_path": "C:\\Users\\sdl1_\\MattTests\\OT-Job-Manager\\opentrons.py",
+      "controller_ip": "169.254.179.32",
+      "arduino": {
+        "port": "COM4",
+        "baudrate": 115200
+      },
+      "deck": {
+        "slots": {
+          "A1": {
+            "name": "single_electrode_module",
+            "display": "single_electrode_station",
+            "labware": "custom_single_electrode_station",
+            "file": "labware\\sdl1_single_electrode_tiprack.json",
+            "slot_label": "A1"
+          },
+          "A2": {
+            "name": "parallel_electrode_module",
+            "display": "parallel_electrode_station",
+            "labware": "custom_parallel_electrode_station",
+            "file": "labware\\sdl1_parallel_electrode_tiprack.json",
+            "slot_label": "A2"
+          },
+          "B1": {
+            "name": "destination_plate",
+            "display": "destination",
+            "labware": "actuated_reactor",
+            "file": "labware\\actuated_reactor.json",
+            "slot_label": "B1"
+          },
+          "B2": {
+            "name": "source_plate",
+            "display": "source",
+            "labware": "11_vials_20mL",
+            "file": "labware\\sdl1_11_vials_20mL.json",
+            "slot_label": "B2"
+          },
+          "C3": {
+            "name": "tiprack_1000ul",
+            "display": "tiprack",
+            "labware": "opentrons_flex_96_tiprack_1000ul"
+          }
+        },
+        "pipettes": {
+          "right": {
+            "model": "p1000_single_flex",
+            "mount": "right"
+          }
+        },
+        "gripper_slots": {
+          "home": {
+            "pick": [
+              230,
+              260,
+              150
+            ],
+            "place": [
+              230,
+              260,
+              150
+            ],
+            "safe_z": 150
+          },
+          "B2": {
+            "pick": [
+              230,
+              260,
+              63
+            ],
+            "place": [
+              230,
+              260,
+              63
+            ],
+            "safe_z": 150
+          },
+          "C2": {
+            "pick": [
+              230,
+              150,
+              10
+            ],
+            "place": [
+              230,
+              150,
+              10
+            ],
+            "safe_z": 150
+          }
+        }
+      }
+    },
+    "arm": {
+      "module": "myxArm_Utils.py"
+    }
+  }
+}

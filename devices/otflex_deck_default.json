@@ -1,0 +1,41 @@
+{
+  "controller_ip": "127.0.0.1",
+  "deck": {
+    "slots": {
+      "A1": { "name": "electrode_module",            "display": "electrode_station",             "labware": "custom_electrode_holder" },
+      "A2": { "name": "parallel_electrode_module",   "display": "parallel_electrode_station",    "labware": "custom_parallel_electrode_station" },
+      "A3": { "name": "trash",                      "display": "trash (drop tips)",            "labware": "opentrons_1_trash_1100ml_fixed" },
+
+      "B1": { "name": "auto_reactor",               "display": "auto_reactor",                  "labware": "custom_auto_reactor" },
+      "B2": { "name": "source_plate",               "display": "precursor_vials",               "labware": "nest_12_reservoir_15ml" },
+      "B3": { "name": "reactor_plate",              "display": "reactor",                       "labware": "corning_96_wellplate_360ul_flat" },
+
+      "C1": { "name": "tiprack_50ul",               "display": "tiprack_50ul",                  "labware": "opentrons_flex_96_tiprack_50ul" },
+      "C2": { "name": "vial_cap_storage",           "display": "vial_cap_storage",              "labware": "custom_vial_cap_holder" },
+      "C3": { "name": "tiprack_1000ul",             "display": "tiprack_1000ul",                "labware": "opentrons_flex_96_tiprack_1000ul" },
+
+      "D1": { "name": "substrate_storage",          "display": "substrate_storage",             "labware": "custom_substrate_storage" },
+      "D2": { "name": "ph_meter",                   "display": "ph_meter",                      "labware": "custom_ph_meter_holder" },
+      "D3": { "name": "heater_shaker",              "display": "heater_shaker",                 "labware": "custom_heater_shaker" }
+    },
+    "pipettes": {
+      "left":  { "model": "p1000_single_flex", "mount": "left" },
+      "right": { "model": "flex_gripper",        "mount": "right" }
+    }
+  },
+  "arduino": {
+    "port": "/dev/ttyACM0",
+    "baudrate": 115200
+  },
+  "gripper_slots": {
+    "A1": { "pick": [230, 260, 63],  "place": [230, 260, 63],  "safe_z": 150 },
+    "A2": { "pick": [230, 150, 10],  "place": [230, 150, 10],  "safe_z": 150 },
+    "B1": { "pick": [200, 200, 10],  "place": [200, 200, 10],  "safe_z": 150 },
+    "B2": { "pick": [210, 210, 10],  "place": [210, 210, 10],  "safe_z": 150 },
+    "B3": { "pick": [220, 220, 10],  "place": [220, 220, 10],  "safe_z": 150 },
+    "C2": { "pick": [230, 230, 10],  "place": [230, 230, 10],  "safe_z": 150 },
+    "C3": { "pick": [240, 240, 10],  "place": [240, 240, 10],  "safe_z": 150 },
+    "D1": { "pick": [250, 250, 10],  "place": [250, 250, 10],  "safe_z": 150 }
+  }
+}
+

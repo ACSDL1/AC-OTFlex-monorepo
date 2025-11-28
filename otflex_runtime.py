@@ -1,0 +1,1068 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+otflex_runtime.py
+
+Runtime wrapper for OT-Flex + Arduino peripherals.
+Implements the required entrypoints used by adapters/otflex_adapter.py:
+  - otflex_connect(cfg)
+  - otflex_disconnect()
+  - otflex_transfer(params)
+  - otflex_gripper(params)
+  - otflex_wash(params)
+  - otflex_furnace(params)
+  - otflex_pump(params)
+  - otflex_electrode(params)
+  - otflex_reactor(params)
+  - otflex_echem_measure(params)
+
+This module intentionally does NOT import OTFLEX_WORKFLOW_Iliya.py to avoid
+executing its top-level code during import. Instead it talks to
+opentronsClient and to Arduino over serial using the command protocol
+reflected in OTFLEX_WORKFLOW_Iliya.py.
+"""
+
+from __future__ import annotations
+import os
+import sys
+import time
+from typing import Any, Dict, Optional
+from pathlib import Path
+import importlib.util
+
+# Add root directory to Python path for imports
+_root_dir = Path(__file__).parent.parent.parent
+if str(_root_dir) not in sys.path:
+    sys.path.append(str(_root_dir))
+
+from utils.tip_tracker import TipTracker, id_to_well
+
+# Optional deps (default bundled client)
+try:
+    from opentrons import opentronsClient  # type: ignore
+except Exception:
+    opentronsClient = None  # type: ignore
+
+try:
+    import serial  # type: ignore
+except Exception:
+    serial = None  # type: ignore
+
+
+class _ArduinoClient:
+    def __init__(self, port: str, baudrate: int = 115200, timeout: float = 5.0):
+        self._port = port
+        self._baudrate = baudrate
+        self._timeout = timeout
+        self._ser = None
+
+    def connect(self):
+        if serial is None:
+            print("[OTFlex][WARN] pyserial not available; Arduino disabled")
+            return
+        self._ser = serial.Serial(self._port, self._baudrate, timeout=self._timeout)
+        time.sleep(2.0)
+
+    def disconnect(self):
+        if self._ser:
+            self._ser.close()
+            self._ser = None
+
+    def _cmd(self, line: str, expect_ok: bool = True, extra_timeout: float = 0.0):
+        if not self._ser:
+            print(f"[OTFlex][WARN] Arduino not connected; skip cmd: {line}")
+            return
+        self._ser.write((line + "\n").encode())
+        t_end = time.time() + max(self._timeout + extra_timeout, 0.1)
+        buf = b""
+        while time.time() < t_end:
+            if self._ser.in_waiting > 0:
+                b = self._ser.read()
+                buf += b
+                if buf.endswith(b"\r\n"):
+                    s = buf.decode().strip()
+                    if s == "0":
+                        return
+                    elif s == "1":
+                        raise RuntimeError(f"Arduino returned error for: {line}")
+                    buf = b""  # collect log lines, continue
+        if expect_ok:
+            print(f"[OTFlex][WARN] Arduino no-OK for: {line}")
+
+    # High-level helpers reflecting OTFLEX_WORKFLOW_Iliya Arduino API
+    def set_furnace(self, open_: bool):
+        self._cmd("set_furnace_open" if open_ else "set_furnace_close", extra_timeout=6.5)
+
+    def set_reactor(self, on: bool):
+        self._cmd("set_reactor_on" if on else "set_reactor_off", extra_timeout=5.8)
+
+    def set_pump(self, pump: int, on: bool):
+        self._cmd(f"set_pump_on {pump}" if on else f"set_pump_off {pump}")
+
+    def set_pump_time(self, pump: int, ms: int):
+        self._cmd(f"set_pump_on_time {pump} {ms}", extra_timeout=ms/1000.0 + 3.0)
+
+    def set_ultrasonic(self, base: int, on: bool):
+        self._cmd(f"set_ultrasonic_on {base}" if on else f"set_ultrasonic_off {base}")
+
+    def set_ultrasonic_time(self, base: int, ms: int):
+        self._cmd(f"set_ultrasonic_on_time {base} {ms}", extra_timeout=ms/1000.0 + 3.0)
+
+    def switch_electrode(self, refer: bool):
+        self._cmd("switch_2Electrode" if refer else "switch_3Electrode")
+
+
+class _OTFlexRuntime:
+    def __init__(self):
+        self.oc = None
+        self.deck = {}
+        self.pipettes = {}
+        self.arduino: Optional[_ArduinoClient] = None
+        self.lw_ids: Dict[str, str] = {}
+        self.root_dir = Path.cwd()
+        self.tip_tracker: Optional[TipTracker] = None
+        # Preserve gripper slot poses from devices.otflex.deck.gripper_slots
+        self.gripper_slots: Dict[str, Any] = {}
+
+    # ---------- lifecycle ----------
+    def connect(self, cfg: Dict[str, Any]):
+        # Prepare deck
+        deck_norm = (cfg or {}).get("deck_norm", {})
+        slots = deck_norm.get("slots", {}) or ((cfg or {}).get("deck", {}) or {}).get("slots", {})
+        self.deck = {k: v for k, v in slots.items() if v}
+        # Also preserve gripper slot poses for gripper moves
+        try:
+            self.gripper_slots = (((cfg or {}).get("deck", {}) or {}).get("gripper_slots", {})) or {}
+        except Exception:
+            self.gripper_slots = {}
+        rd = (cfg or {}).get("_root_dir")
+        if rd:
+            try:
+                self.root_dir = Path(rd)
+            except Exception:
+                pass
+
+        # Connect Arduino if provided
+        ard = (cfg or {}).get("arduino") or {}
+        if ard:
+            try:
+                self.arduino = _ArduinoClient(ard.get("port", "/dev/ttyACM0"), ard.get("baudrate", 115200))
+                self.arduino.connect()
+                print(f"[OTFlex][REAL] Arduino connected on {ard.get('port', '/dev/ttyACM0')}")
+            except Exception as e:
+                print(f"[OTFlex][WARN] Arduino connection failed: {e}")
+                print("[OTFlex][WARN] Running without Arduino hardware")
+                self.arduino = None
+
+        # Connect Opentrons (allow overriding opentrons.py via cfg['opentrons_path'])
+        ip = (cfg or {}).get("controller_ip") or os.environ.get("OT_IP") or "127.0.0.1"
+        oc_ctor = None
+        used_file = None
+
+        ext_path = (cfg or {}).get("opentrons_path")
+        if isinstance(ext_path, str) and ext_path:
+            try:
+                p = Path(ext_path)
+                if p.exists():
+                    spec = importlib.util.spec_from_file_location("opentrons_ext", str(p))
+                    mod = importlib.util.module_from_spec(spec)
+                    assert spec and spec.loader
+                    spec.loader.exec_module(mod)  # type: ignore
+                    if hasattr(mod, 'opentronsClient'):
+                        oc_ctor = getattr(mod, 'opentronsClient')
+                        used_file = str(p)
+                        print(f"[OTFlex][INFO] Using external opentrons client from: {used_file}")
+                else:
+                    print(f"[OTFlex][WARN] opentrons_path not found: {ext_path}")
+            except Exception as e:
+                print(f"[OTFlex][WARN] Failed loading opentrons_path {ext_path}: {e}")
+
+        if oc_ctor is None:
+            if opentronsClient is None:
+                print("[OTFlex][WARN] opentronsClient not available; Flex disabled (dry)")
+                return
+            oc_ctor = opentronsClient
+            try:
+                mod_name = oc_ctor.__module__
+                used_file = sys.modules.get(mod_name).__file__ if sys.modules.get(mod_name) else None
+            except Exception:
+                used_file = None
+
+        self.oc = oc_ctor(strRobotIP=ip, strRobot='flex')
+        print(f"[OTFlex][REAL] OpenTrons connected to {ip} using module: {used_file}")
+
+        # Load pipettes if declared
+        pips = ((cfg or {}).get("deck", {}) or {}).get("pipettes", {}) or {}
+        for side, rec in pips.items():
+            model = rec.get("model")
+            mount = rec.get("mount", side)
+            if model:
+                try:
+                    self.oc.loadPipette(strPipetteName=model, strMount=mount)
+                except Exception as e:
+                    print(f"[OTFlex][WARN] loadPipette failed: {model}@{mount}: {e}")
+
+        # Load labware on deck (standard models only; custom requires file path)
+        for sk, rec in self.deck.items():
+            slot = rec.get("slot_label") or sk  # if cfg already uses A1..D3 keys
+            model = rec.get("labware")
+            name = rec.get('name')
+            if not model:
+                continue
+            print(f"[OTFlex][DEBUG] Loading labware: slot={slot}, model={model}, name={name}")
+            try:
+                if model.startswith("opentrons_") or model.startswith("corning_") or model.startswith("nest_"):
+                    lid = self.oc.loadLabware(slot, model)
+                    # store both name and model for lookup
+                    if name:
+                        self.lw_ids[name] = lid
+                        print(f"[OTFlex][DEBUG] Registered labware name '{name}' -> ID '{lid}'")
+                    self.lw_ids[model] = lid
+                    print(f"[OTFlex][DEBUG] Registered labware model '{model}' -> ID '{lid}'")
+                else:
+                    # Try custom labware JSON if provided as absolute/relative path
+                    path_hint = rec.get("file") or model
+                    if isinstance(path_hint, str) and path_hint.endswith('.json'):
+                        lid = self.oc.loadCustomLabwareFromFile(slot, path_hint)
+                        if name:
+                            self.lw_ids[name] = lid
+                            print(f"[OTFlex][DEBUG] Registered custom labware name '{name}' -> ID '{lid}'")
+                        self.lw_ids[model] = lid
+                        print(f"[OTFlex][DEBUG] Registered custom labware model '{model}' -> ID '{lid}'")
+                    else:
+                        print(f"[OTFlex][INFO] Skip non-standard labware at {slot}: {model} (no JSON file path)")
+            except Exception as e:
+                print(f"[OTFlex][WARN] load labware failed at {slot}: {model}: {e}")
+
+        # Tip tracker file
+        tip_file = (cfg or {}).get('tip_tracker_file')
+        if not tip_file:
+            tip_file = str(self.root_dir / '.state' / 'tips_1000ul.json')
+        try:
+            self.tip_tracker = TipTracker(Path(tip_file))
+        except Exception as e:
+            print('[OTFlex][WARN] TipTracker init failed:', e)
+
+    def disconnect(self):
+        if self.oc:
+            try:
+                self.oc.homeRobot()
+            except Exception:
+                pass
+        if self.arduino:
+            self.arduino.disconnect()
+        self.oc = None
+
+    # ---------- high-level OT actions ----------
+    def transfer(self, p: Dict[str, Any]):
+        if not self.oc:
+            print("[OTFlex][DRY] transfer:", p)
+            return
+        src = p
+        pip = p.get('pipette') or 'p1000_single_flex'
+        move_speed = float(p.get('move_speed') or 100)
+        safe_transit_height = float(p.get('safe_height', 20.0))  # Configurable safe height
+
+        print(f"[OTFlex][DEBUG] Raw transfer params: {p}")
+        print(f"[OTFlex][DEBUG] Using pipette: {pip}")
+
+        def mv(lw, well, dX=0, dY=0, dZ=0):
+            # Resolve labware name to ID
+            lw_id = self.lw_ids.get(lw, lw)  # fallback to original name if not found
+
+            self.oc.moveToWell(strLabwareName=lw_id, strWellName=well, strPipetteName=pip,
+                               strOffsetStart='top', fltOffsetX=dX, fltOffsetY=dY, fltOffsetZ=dZ, intSpeed=int(move_speed))
+
+        def asp(lw, well, vol, dX=0, dY=0, dZ=0):
+            # Resolve labware name to ID
+            lw_id = self.lw_ids.get(lw, lw)  # fallback to original name if not found
+            self.oc.aspirate(strLabwareName=lw_id, strWellName=well, strPipetteName=pip,
+                             intVolume=int(vol), strOffsetStart='bottom', fltOffsetX=dX, fltOffsetY=dY, fltOffsetZ=dZ)
+
+        def dsp(lw, well, vol, dX=0, dY=0, dZ=0):
+            # Resolve labware name to ID
+            lw_id = self.lw_ids.get(lw, lw)  # fallback to original name if not found
+            self.oc.dispense(strLabwareName=lw_id, strWellName=well, strPipetteName=pip,
+                             intVolume=int(vol), strOffsetStart='bottom', fltOffsetX=dX, fltOffsetY=dY, fltOffsetZ=dZ)
+
+        # Handle both old and new parameter formats
+        from_lw = p.get('from_labware') or p.get('from', {}).get('labware')
+        to_lw = p.get('to_labware') or p.get('to', {}).get('labware')
+        from_well = p.get('from_well') or p.get('from', {}).get('well') or 'A1'
+        to_well = p.get('to_well') or p.get('to', {}).get('well') or 'A1'
+        vol = int(p.get('volume_uL') or 0)
+        fdX, fdY, fdZ = p.get('from_dX', 0), p.get('from_dY', 0), p.get('from_dZ', 2)
+        tdX, tdY, tdZ = p.get('to_dX', 0), p.get('to_dY', 0), p.get('to_dZ', 20)
+
+        print(f"[OTFlex][DEBUG] Transfer params: from_lw={from_lw}, to_lw={to_lw}")
+        print(f"[OTFlex][DEBUG] Available labware IDs: {list(self.lw_ids.keys())}")
+        print(f"[OTFlex][DEBUG] Resolving '{from_lw}' -> '{self.lw_ids.get(from_lw, 'NOT_FOUND')}'")
+        print(f"[OTFlex][DEBUG] Resolving '{to_lw}' -> '{self.lw_ids.get(to_lw, 'NOT_FOUND')}')")
+
+        # autopick tip if configured
+        if self.tip_tracker and p.get('autopick_tip', True):
+            tiprack_name = p.get('tiprack') or 'tiprack_1000ul'
+            tiprack_id = self.lw_ids.get(tiprack_name) or self.lw_ids.get('opentrons_flex_96_tiprack_1000ul')
+            if tiprack_id:
+                try:
+                    _, tip_well = self.tip_tracker.next_tip()
+                    self.oc.moveToWell(strLabwareName=tiprack_id, strWellName=tip_well, strPipetteName=pip,
+                                       strOffsetStart='top', fltOffsetX=0, fltOffsetY=0, fltOffsetZ=0, intSpeed=int(move_speed))
+                    self.oc.pickUpTip(strLabwareName=tiprack_id, strPipetteName=pip, strWellName=tip_well, fltOffsetY=0)
+                except Exception as e:
+                    print('[OTFlex][WARN] pick tip failed:', e)
+
+        # naive sequence
+        repeats = len(to_well) if isinstance(to_well, list) else 1
+        for i in range(repeats):
+            print(f"[OTFlex] transfer cycle {i+1}/{repeats}, moving to {from_lw}.{from_well}")
+            # Move to source with safe transit height
+            mv(from_lw, from_well, fdX, fdY, 0)
+            # Aspirate at specified depth
+            asp(from_lw, from_well, vol, fdX, fdY, fdZ)
+            # Move to destination with safe transit height
+            mv(to_lw, to_well[i], tdX, tdY, 0)
+            # Dispense at specified depth
+            dsp(to_lw, to_well[i], vol, tdX, tdY, tdZ)
+
+        # drop tip to trash if available
+        if p.get('autopick_tip', True):
+
+            trash_id = self.lw_ids.get('trash') or self.lw_ids.get('opentrons_flex_trash')
+
+            print('[OTFlex]trash id:', trash_id)
+            try:
+                # Since trash registration is unreliable, just use disposal location
+                print('[OTFlex] Dropping tip using disposal location (trash registration failed)')
+                self.oc.dropTip(strPipetteName=pip, boolDropInDisposal=True)
+            except Exception as e:
+                print(f'[OTFlex][WARN] tip drop failed: {e}')
+
+    def toolTransfer(self, p: Dict[str, Any]):
+        if not self.oc:
+            print("[OTFlex][DRY] electrode transfer:", p)
+            return
+        pip = p.get('pipette') or 'p1000_single_flex'
+
+        print(f"[OTFlex][DEBUG] Raw transfer params: {p}")
+        print(f"[OTFlex][DEBUG] Using pipette: {pip}")
+
+        # Handle both old and new parameter formats
+        from_lw = p.get('from_labware') or p.get('from', {}).get('labware')
+        to_lw = p.get('to_labware') or p.get('to', {}).get('labware')
+        from_well = p.get('from_well') or p.get('from', {}).get('well') or 'A1'
+        to_well = p.get('to_well') or p.get('to', {}).get('well') or 'A1'
+
+        print(f"[OTFlex][DEBUG] Transfer params: from_lw={from_lw}, to_lw={to_lw}")
+        print(f"[OTFlex][DEBUG] Available labware IDs: {list(self.lw_ids.keys())}")
+        print(f"[OTFlex][DEBUG] Resolving '{from_lw}' -> '{self.lw_ids.get(from_lw, 'NOT_FOUND')}'")
+        print(f"[OTFlex][DEBUG] Resolving '{to_lw}' -> '{self.lw_ids.get(to_lw, 'NOT_FOUND')}')")
+
+        from_lw_id = self.lw_ids.get(from_lw, from_lw)
+        to_lw_id = self.lw_ids.get(to_lw, to_lw)
+
+        print(f"[OTFlex] Picking up electrode tip from {from_lw_id}.{from_well}")
+        self.oc.pickUpTip(
+            strLabwareName=from_lw_id,
+            strPipetteName=pip,
+            strWellName=from_well,
+            fltOffsetX=0.5,
+            fltOffsetY=1
+        )
+
+        print(f"[OTFlex] Moving electrode to {to_lw_id}.{to_well} (approach)")
+        self.oc.moveToWell(
+            strLabwareName=to_lw_id,
+            strWellName=to_well,
+            strPipetteName=pip,
+            strOffsetStart='top',
+            fltOffsetX=-3.5,
+            fltOffsetY=-34.5,
+            fltOffsetZ=0,
+            intSpeed=50
+        )
+
+        print(f"[OTFlex] Moving electrode to measurement position")
+        self.oc.moveToWell(
+            strLabwareName=to_lw_id,
+            strWellName=to_well,
+            strPipetteName=pip,
+            strOffsetStart='bottom',
+            fltOffsetX=-3.5,
+            fltOffsetY=-34.5,
+            fltOffsetZ=0,
+            intSpeed=50
+        )
+
+        import time
+        time.sleep(2)
+        
+        # Retract electrode (back to high position)
+        print(f"[OTFlex] Retracting electrode")
+        self.oc.moveToWell(
+            strLabwareName=to_lw_id,
+            strWellName=to_well,
+            strPipetteName=pip,
+            strOffsetStart='top',
+            fltOffsetX=-3.5,
+            fltOffsetY=-34.5,
+            fltOffsetZ=0,
+            intSpeed=50
+        )
+        
+        # Return to electrode station
+        print(f"[OTFlex] Returning electrode tip to station")
+        self.oc.moveToWell(
+            strLabwareName=from_lw_id,
+            strWellName=from_well,
+            strPipetteName=pip,
+            strOffsetStart='top',
+            fltOffsetX=0.5,
+            fltOffsetY=1,
+            fltOffsetZ=10,
+            intSpeed=100
+        )
+        
+        # Drop electrode tip back to station
+        print(f"[OTFlex] Dropping electrode tip back to station")
+        self.oc.dropTip(
+            strPipetteName=pip,
+            boolDropInDisposal=False,
+            strLabwareName=from_lw_id,
+            strWellName=from_well,
+            strOffsetStart="bottom",
+            fltOffsetZ=12
+        )
+        
+        print(f"[OTFlex] Electrode tool transfer completed")
+
+    def flushWell(self, p: Dict[str, Any]):
+        """Combined electrode positioning and Arduino pump flushing"""
+        if not self.oc:
+            print("[OTFlex][DRY] flush well:", p)
+            return
+
+        pip = p.get('pipette', 'p1000_single_flex')
+
+        # Handle both normalized (from adapter) and direct parameter formats
+        if 'from_labware' in p:
+            # Normalized format from adapter
+            from_lw = p.get('from_labware')
+            from_well = p.get('from_well', 'A1')
+            to_lw = p.get('to_labware')
+            to_well = p.get('to_well', 'A1')
+
+            pickup_offset_x = float(p.get('from_dX', 0.5))
+            pickup_offset_y = float(p.get('from_dY', 1.0))
+            pickup_offset_z = float(p.get('from_dZ', 0.0))
+
+            target_offset_x = float(p.get('to_dX', -3.5))
+            target_offset_y = float(p.get('to_dY', -34.5))
+            target_offset_z = float(p.get('to_dZ', 0.0))
+        else:
+            # Direct nested format
+            from_obj = p.get('from', {})
+            to_obj = p.get('to', {})
+
+            from_lw = from_obj.get('labware')
+            from_well = from_obj.get('well', 'A1')
+            to_lw = to_obj.get('labware')
+            to_well = to_obj.get('well', 'A1')
+
+            pickup_offset_x = float(from_obj.get('offsetX', 0.5))
+            pickup_offset_y = float(from_obj.get('offsetY', 1.0))
+            pickup_offset_z = float(from_obj.get('offsetZ', 0.0))
+
+            target_offset_x = float(to_obj.get('offsetX', -3.5))
+            target_offset_y = float(to_obj.get('offsetY', -34.5))
+            target_offset_z = float(to_obj.get('offsetZ', 0.0))
+
+        # Arduino pump parameters
+        time_ms = float(p.get('time_ms', 10.0))  # milseconds
+        repeats = int(p.get('repeats', 1))
+
+        # Validate required parameters
+        if not from_lw or not to_lw:
+            raise ValueError(f"Missing required labware: from_lw={from_lw}, to_lw={to_lw}")
+
+        # Handle well arrays for multi-well operations
+        to_wells = to_well if isinstance(to_well, list) else [to_well]
+
+        print(f"[OTFlex][DEBUG] Flush well operation")
+        print(f"[OTFlex][DEBUG] From: {from_lw}.{from_well}")
+        print(f"[OTFlex][DEBUG] To: {to_lw}.{to_wells}")
+        print(f"[OTFlex][DEBUG] Repeats: {repeats} times, duration: {time_ms}ms")
+
+        from_lw_id = self.lw_ids.get(from_lw, from_lw)
+        to_lw_id = self.lw_ids.get(to_lw, to_lw)
+
+        # Step 1: Pick up electrode
+        print(f"[OTFlex] Picking up electrode from {from_lw_id}.{from_well}")
+        self.oc.pickUpTip(
+            strLabwareName=from_lw_id,
+            strPipetteName=pip,
+            strWellName=from_well,
+            fltOffsetX=pickup_offset_x,
+            fltOffsetY=pickup_offset_y,
+            fltOffsetZ=pickup_offset_z
+        )
+
+        # Step 2-3: Loop through all target wells
+        for i, current_well in enumerate(to_wells):
+            print(f"[OTFlex] Moving electrode to flush position {to_lw_id}.{current_well} ({i+1}/{len(to_wells)})")
+            self.oc.moveToWell(
+                strLabwareName=to_lw_id,
+                strWellName=current_well,
+                strPipetteName=pip,
+                strOffsetStart='bottom',
+                fltOffsetX=target_offset_x,
+                fltOffsetY=target_offset_y,
+                fltOffsetZ=target_offset_z,
+                intSpeed=50
+            )
+
+            # Run Arduino pump flushing
+            print(f"[OTFlex] Starting operation at {current_well} for {time_ms}ms")
+            for _ in range(repeats):
+                self._run_pump_flush(2, time_ms)
+                self._run_pump_flush(0, 1000)
+                self._run_pump_flush(2, time_ms)
+                self._run_pump_flush(0, 1000)
+                self._run_pump_flush(2, time_ms)
+
+        # Step 4: Retract electrode from last well
+        last_well = to_wells[-1]
+        print(f"[OTFlex] Retracting electrode from {last_well}")
+        self.oc.moveToWell(
+            strLabwareName=to_lw_id,
+            strWellName=last_well,
+            strPipetteName=pip,
+            strOffsetStart='top',
+            fltOffsetX=target_offset_x,
+            fltOffsetY=target_offset_y,
+            fltOffsetZ=target_offset_z,
+            intSpeed=50
+        )
+
+        # Step 5: Conditionally return electrode
+        print(f"[OTFlex] Returning electrode to station")
+        self.oc.moveToWell(
+            strLabwareName=from_lw_id,
+            strWellName=from_well,
+            strPipetteName=pip,
+            strOffsetStart='top',
+            fltOffsetX=pickup_offset_x,
+            fltOffsetY=pickup_offset_y,
+            fltOffsetZ=10,
+            intSpeed=100
+        )
+
+        self.oc.dropTip(
+            strPipetteName=pip,
+            boolDropInDisposal=False,
+            strLabwareName=from_lw_id,
+            strWellName=from_well,
+            strOffsetStart="bottom",
+            fltOffsetZ=12
+        )
+
+        if bool(p.get('home_after', False)):
+                    try:
+                        self.oc.homeRobot()
+                    except Exception:
+                        pass
+
+        print(f"[OTFlex] Flush well operation completed with electrode return")
+
+
+    def _run_pump_flush(self, pump_id, duration):
+        """Run Arduino pump flushing operation using existing pump function"""
+        try:
+            print(f"[OTFlex] Activating Arduino pumps: {pump_id}")
+
+            # Create pump parameters for the existing otflex_pump function
+            pump_params = {
+                "pump_id": pump_id,
+                "time_ms": duration
+            }
+
+            print(f"[OTFlex] Calling otflex_pump with params: {pump_params}")
+
+            # Use the existing otflex_pump function
+            otflex_pump(pump_params)
+
+            print(f"[OTFlex] Pump operation completed")
+
+        except Exception as e:
+            print(f"[OTFlex] ERROR in pump flush operation: {e}")
+            # Continue with simulation
+            import time
+            time.sleep(duration)
+            print(f"[OTFlex] Fallback: Simulated {pump_id} for {duration}ms")
+
+    def potentExperiment(self, p: Dict[str, Any]):
+        """Combined electrode positioning and potentiostat experiment"""
+        if not self.oc:
+            print("[OTFlex][DRY] potentiostat experiment:", p)
+            return
+
+        pip = p.get('pipette', 'p1000_single_flex')
+
+        # Handle both normalized (from adapter) and direct parameter formats
+        # Normalized format: from_labware, from_well, from_dX, etc.
+        # Direct format: from: {labware, well, offsetX}, to: {labware, well, offsetX}
+
+        if 'from_labware' in p:
+            # Normalized format from adapter
+            from_lw = p.get('from_labware')
+            from_well = p.get('from_well', 'A1')
+            to_lw = p.get('to_labware')
+            to_well = p.get('to_well', 'A1')
+
+            pickup_offset_x = float(p.get('from_dX', 0.5))
+            pickup_offset_y = float(p.get('from_dY', 1.0))
+            pickup_offset_z = float(p.get('from_dZ', 0.0))
+
+            target_offset_x = float(p.get('to_dX', -3.5))
+            target_offset_y = float(p.get('to_dY', -34.5))
+            target_offset_z = float(p.get('to_dZ', 10.0))
+        else:
+            # Direct nested format
+            from_obj = p.get('from', {})
+            to_obj = p.get('to', {})
+
+            from_lw = from_obj.get('labware')
+            from_well = from_obj.get('well', 'A1')
+            to_lw = to_obj.get('labware')
+            to_well = to_obj.get('well', 'A1')
+
+            pickup_offset_x = float(from_obj.get('offsetX', 0.5))
+            pickup_offset_y = float(from_obj.get('offsetY', 1.0))
+            pickup_offset_z = float(from_obj.get('offsetZ', 0.0))
+
+            target_offset_x = float(to_obj.get('offsetX', -3.5))
+            target_offset_y = float(to_obj.get('offsetY', -34.5))
+            target_offset_z = float(to_obj.get('offsetZ', 10.0))
+
+        # Potentiostat experiment parameters
+        potentiostat_configs = p.get('potentiostat_configs', [])
+        data_folder = p.get('data_folder', r"C:\Users\sdl1_\OneDrive\Documents\Echem")
+
+        # CV parameters
+        cv_params = p.get('cv_params', {
+            'min_V': -2.3,
+            'max_V': -2.5,
+            'cycles': 100,
+            'mV_s': 200,
+            'step_hz': 1000
+        })
+
+        # Validate required parameters
+        if not from_lw or not to_lw:
+            raise ValueError(f"Missing required labware: from_lw={from_lw}, to_lw={to_lw}")
+
+        if not potentiostat_configs:
+            raise ValueError("No potentiostat configurations provided")
+
+        print(f"[OTFlex][DEBUG] Potentiostat CV experiment")
+        print(f"[OTFlex][DEBUG] From: {from_lw}.{from_well}")
+        print(f"[OTFlex][DEBUG] To: {to_lw}.{to_well}")
+        print(f"[OTFlex][DEBUG] Potentiostats: {len(potentiostat_configs)}")
+
+        from_lw_id = self.lw_ids.get(from_lw, from_lw)
+        to_lw_id = self.lw_ids.get(to_lw, to_lw)
+
+        # Step 1: Pick up electrode
+        print(f"[OTFlex] Picking up electrode from {from_lw_id}.{from_well}")
+        self.oc.pickUpTip(
+            strLabwareName=from_lw_id,
+            strPipetteName=pip,
+            strWellName=from_well,
+            fltOffsetX=pickup_offset_x,
+            fltOffsetY=pickup_offset_y,
+            fltOffsetZ=pickup_offset_z
+        )
+
+        # Step 2: Move electrode to measurement position
+        print(f"[OTFlex] Moving electrode to measurement position {to_lw_id}.{to_well}")
+        self.oc.moveToWell(
+            strLabwareName=to_lw_id,
+            strWellName=to_well,
+            strPipetteName=pip,
+            strOffsetStart='bottom',
+            fltOffsetX=target_offset_x,
+            fltOffsetY=target_offset_y,
+            fltOffsetZ=target_offset_z,
+            intSpeed=50
+        )
+
+        # Step 3: Run potentiostat CV experiment
+        print(f"[OTFlex] Starting CV experiment with {len(potentiostat_configs)} potentiostats")
+        time.sleep(5)
+        # self._run_potentiostat_experiment(potentiostat_configs, data_folder, cv_params)
+
+        # Step 4: Retract electrode
+        print(f"[OTFlex] Retracting electrode")
+        self.oc.moveToWell(
+            strLabwareName=to_lw_id,
+            strWellName=to_well,
+            strPipetteName=pip,
+            strOffsetStart='top',
+            fltOffsetX=target_offset_x,
+            fltOffsetY=target_offset_y,
+            fltOffsetZ=target_offset_z,
+            intSpeed=50
+        )
+
+        # Step 5: Conditionally return electrode
+        print(f"[OTFlex] Returning electrode to station")
+        self.oc.moveToWell(
+            strLabwareName=from_lw_id,
+            strWellName=from_well,
+            strPipetteName=pip,
+            strOffsetStart='top',
+            fltOffsetX=pickup_offset_x,
+            fltOffsetY=pickup_offset_y,
+            fltOffsetZ=10,
+            intSpeed=100
+        )
+
+        self.oc.dropTip(
+            strPipetteName=pip,
+            boolDropInDisposal=False,
+            strLabwareName=from_lw_id,
+            strWellName=from_well,
+            strOffsetStart="bottom",
+            fltOffsetZ=12
+        )
+        print(f"[OTFlex] Potentiostat experiment completed with electrode return")
+
+    def _run_potentiostat_experiment(self, configs, data_folder, cv_params):
+        """Run the potentiostat CV experiment sequentially"""
+        try:
+            import time
+
+            print(f"[OTFlex] Starting sequential CV experiment...")
+            start_time = time.time()
+
+            # Run each potentiostat sequentially
+            for i, config in enumerate(configs):
+                print(f"[OTFlex] Running potentiostat {i+1}/{len(configs)}: {config['com_port']}")
+                _run_cv_process_standalone(config, data_folder, cv_params)
+
+            end_time = time.time()
+            print(f"[OTFlex] Sequential CV completed in {end_time - start_time:.2f} seconds")
+
+        except ImportError as e:
+            print(f"[OTFlex] ERROR: Missing potentiostat dependencies: {e}")
+            print(f"[OTFlex] Simulating CV experiment...")
+            import time
+            time.sleep(5)  # Simulate experiment time
+            print(f"[OTFlex] Simulated CV experiment completed")
+        except Exception as e:
+            print(f"[OTFlex] ERROR in potentiostat experiment: {e}")
+            raise
+
+
+
+
+
+    def gripper(self, p: Dict[str, Any]):
+        if not self.oc:
+            print("[OTFlex][DRY] gripper:", p)
+            return
+        # Expect params: {action: 'move'|'open'|'close'|'pick_and_place', from_slot, to_slot}
+        action = (p.get('action') or 'move').lower()
+        # Prefer gripper slots captured during connect();
+        # fallback to any provided inline in params.
+        gs = (self.gripper_slots or {})
+        if not gs and isinstance(p, dict):
+            gs = (p.get('gripper_slots') or {})
+
+        def pose_for(slot: Optional[str], key: str) -> Optional[tuple]:
+            if not slot:
+                return None
+            rec = gs.get(slot)
+            if not rec:
+                return None
+            arr = rec.get(key)
+            if isinstance(arr, (list, tuple)) and len(arr) >= 3:
+                return float(arr[0]), float(arr[1]), float(arr[2])
+            return None
+
+        def safe_z(slot: Optional[str]) -> float:
+            rec = gs.get(slot or '', {})
+            return float(rec.get('safe_z', 150))
+
+        if action == 'open':
+            print(f"[OTFlex] Gripper opening: {p}")
+            if self.oc:
+                try:
+                    self.oc.openGripper()
+                    print("[OTFlex] Gripper opened successfully")
+                except Exception as e:
+                    print(f"[OTFlex][WARN] Gripper open failed: {e}")
+            return
+
+        if action == 'close':
+            print(f"[OTFlex] Gripper closing: {p}")
+            if self.oc:
+                try:
+                    self.oc.closeGripper()
+                    print("[OTFlex] Gripper closed successfully")
+                except Exception as e:
+                    print(f"[OTFlex][WARN] Gripper close failed: {e}")
+            return
+
+        # Handle gripper movement
+        if action == 'move':
+            from_slot = p.get('from_slot')
+            to_slot = p.get('to_slot')
+            print(f"[OTFlex] Moving gripper from {from_slot} to {to_slot}")
+
+            # Get target position
+            # default to move above the target using its 'safe_z' unless override
+            # allow 'phase': 'above'|'pick'|'place'
+            phase = (p.get('phase') or 'pick').lower()
+            if phase == 'above':
+                base = pose_for(to_slot, 'pick') or pose_for(to_slot, 'place')
+                if base:
+                    x, y, _ = base
+                    z = safe_z(to_slot)
+                    target_pos = (x, y, z)
+                else:
+                    target_pos = None
+            else:
+                key = 'place' if phase == 'place' else 'pick'
+                target_pos = pose_for(to_slot, key)
+            if target_pos:
+                x, y, z = target_pos
+                print(f"[OTFlex] Target position: x={x}, y={y}, z={z}")
+                if self.oc:
+                    try:
+                        self.oc.moveGripper(x, y, z)
+                        print(f"[OTFlex] Gripper moved to {to_slot} successfully")
+                    except Exception as e:
+                        print(f"[OTFlex][WARN] Gripper move failed: {e}")
+                else:
+                    print(f"[OTFlex][DRY] Would move gripper to x={x}, y={y}, z={z}")
+            else:
+                print(f"[OTFlex][WARN] No position found for slot {to_slot}")
+            return
+
+        if action in ('pick_and_place', 'sequence'):
+            from_slot = p.get('from_slot')
+            to_slot = p.get('to_slot')
+            print(f"[OTFlex] Pick-and-place from {from_slot} -> {to_slot}")
+
+            pick_pose = pose_for(from_slot, 'pick')
+            place_pose = pose_for(to_slot, 'place') or pose_for(to_slot, 'pick') #?
+            if not pick_pose or not place_pose:
+                print(f"[OTFlex][WARN] Missing pick/place pose for from={from_slot} to={to_slot}")
+                return
+
+            fx, fy, fz_pick = pick_pose
+            tx, ty, tz_place = place_pose
+            fz_above = safe_z(from_slot)
+            tz_above = safe_z(to_slot)
+
+            move_speed = float(p.get('move_speed') or 100)
+
+            ensure_open = bool(p.get('ensure_open', True))
+            close_after_release = bool(p.get('close_after_release', False))
+
+            try:
+                # Move above pickup
+                self.oc.moveGripper(float(fx), float(fy), float(fz_above))
+                if ensure_open:
+                    self.oc.openGripper()
+                # Down to pick
+                self.oc.moveGripper(float(fx), float(fy), float(fz_pick))
+                self.oc.closeGripper()
+                # Up
+                self.oc.moveGripper(float(fx), float(fy), float(fz_above))
+                # Move above place
+                self.oc.moveGripper(float(tx), float(ty), float(tz_above))
+                # Down to place
+                self.oc.moveGripper(float(tx), float(ty), float(tz_place))
+                # Release at place depth
+                self.oc.openGripper()
+                # Up before optional close
+                self.oc.moveGripper(float(tx), float(ty), float(tz_above))
+                if close_after_release:
+                    self.oc.closeGripper()
+                # Optional home
+                if bool(p.get('home_after', False)):
+                    try:
+                        self.oc.homeRobot()
+                    except Exception:
+                        pass
+                print("[OTFlex] Pick-and-place sequence completed")
+            except Exception as e:
+                print(f"[OTFlex][WARN] pick_and_place failed: {e}")
+            return
+
+        print(f"[OTFlex][WARN] Unknown gripper action: {action}")
+        return
+
+    # ---------- Arduino-backed helpers ----------
+    def furnace(self, p: Dict[str, Any]):
+        if not self.arduino:
+            print("[OTFlex][DRY] furnace:", p)
+            return
+        open_ = bool(p.get('open', False))
+        self.arduino.set_furnace(open_)
+        time.sleep(10)
+
+    def pump(self, p: Dict[str, Any]):
+        if not self.arduino:
+            print("[OTFlex][DRY] pump:", p)
+            return
+        pump_id = int(p.get('pump_id', 0))
+        if 'time_ms' in p:
+            self.arduino.set_pump_time(pump_id, int(p['time_ms']))
+        else:
+            on = bool(p.get('on', True))
+            self.arduino.set_pump(pump_id, on)
+
+    def electrode(self, p: Dict[str, Any]):
+        if not self.arduino:
+            print("[OTFlex][DRY] electrode:", p)
+            return
+        refer = bool(p.get('refer', True))
+        self.arduino.switch_electrode(refer)
+
+    def reactor(self, p: Dict[str, Any]):
+        if not self.arduino:
+            print("[OTFlex][DRY] reactor:", p)
+            return
+        state = (p.get('state') or '').lower()
+        if state in ('open','opened','unlock','on'):
+            on = True
+        elif state in ('close','closed','lock','off'):
+            on = False
+        else:
+            on = bool(p.get('on', True))
+        self.arduino.set_reactor(on)
+
+    def wash(self, p: Dict[str, Any]):
+        if not self.arduino:
+            print("[OTFlex][DRY] wash:", p)
+            return
+        # Example: {"ultrasound": {"relay": 7, "duration_s": 20}}
+        us = p.get('ultrasound') or {}
+        if 'duration_s' in us:
+            self.arduino.set_ultrasonic_time(int(us.get('relay', 7)), int(us['duration_s'] * 1000))
+        elif 'on' in us:
+            self.arduino.set_ultrasonic(int(us.get('relay', 7)), bool(us['on']))
+
+    def echem_measure(self, p: Dict[str, Any]):
+        print("[OTFlex][INFO] echem_measure placeholder:", p)
+
+
+_RT = _OTFlexRuntime()
+
+
+# ===== Adapter entrypoints =====
+def otflex_connect(cfg: dict):
+    _RT.connect(cfg or {})
+
+
+def otflex_disconnect():
+    _RT.disconnect()
+
+
+def otflex_transfer(params: dict):
+    _RT.transfer(params or {})
+
+
+def otflex_toolTransfer(params: dict):
+    _RT.toolTransfer(params or {})
+
+def _run_cv_process_standalone(config, data_folder, cv_params):
+    """Run a single potentiostat measurement in a separate process"""
+    try:
+        from pathlib import Path
+        from datetime import datetime
+        from poten_old import Potentiostat, DAC
+
+        com_port = config["com_port"]
+        row = config["row"]
+        base = config["file_name"]
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        out_path = Path(data_folder) / f"{base}_{ts}"
+
+        print(f"Process {row} - Starting on {com_port}")
+        ps = Potentiostat(serial_port=com_port)
+        ps.connect()
+        ps.write_switch(0)
+        ps.write_dac(channels=[DAC.CE_IN, DAC.A_REF, DAC.V_AN], voltages=[0, -5, 0])
+        ocp = ps.read_ocp()
+        print(f"Process {row} - OCP = {ocp:.3f} V")
+
+        print(f"Process {row} - Starting CV measurement...")
+        data = ps.perform_CV(
+            min_V=cv_params['min_V'],
+            max_V=cv_params['max_V'],
+            cycles=cv_params['cycles'],
+            mV_s=cv_params['mV_s'],
+            step_hz=cv_params['step_hz']
+        )
+
+        ps.process_CV(data=data, file_basename=out_path)
+        print(f"Process {row} - CV data saved to {out_path}")
+
+    except Exception as e:
+        print(f"Process {row} - Error: {e}")
+    finally:
+        try:
+            ps.write_switch(0)
+            ps.disconnect()
+        except Exception:
+            pass
+        print(f"Process {row} - Done")
+
+def otflex_potentExperiment(params: dict):
+    _RT.potentExperiment(params or {})
+
+def otflex_flushWell(params: dict):
+    _RT.flushWell(params or {})
+
+def otflex_gripper(params: dict):
+    _RT.gripper(params or {})
+
+def otflex_wash(params: dict):
+    _RT.wash(params or {})
+
+
+def otflex_furnace(params: dict):
+    _RT.furnace(params or {})
+
+
+def otflex_pump(params: dict):
+    _RT.pump(params or {})
+
+
+def otflex_electrode(params: dict):
+    _RT.electrode(params or {})
+
+
+def otflex_reactor(params: dict):
+    '''
+    {
+    "id": "turn_on_reactor",
+    "type": "otflexReactor",
+    "label": "Turn On Reactor", 
+    "params": {
+        "state": "on"
+    }
+    },
+    '''
+    _RT.reactor(params or {})
+
+
+def otflex_echem_measure(params: dict):
+    _RT.echem_measure(params or {})
+
+

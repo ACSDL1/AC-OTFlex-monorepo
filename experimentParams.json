@@ -1,0 +1,89 @@
+{
+    "experimentName": "Selective test",
+    "sourcePlates": {
+        "FeCl3": {
+            "sourcePlate": "strID_vialRack_4",
+            "sourceWell": ["A1", "B1"],
+            "amount_mL": 15, 
+            "concentration_mM": 100,
+            "ph": 1.0
+        },
+        "CrCl3": {
+            "sourcePlate": "strID_vialRack_4",
+            "sourceWell": ["C1"],
+            "amount_mL": 15,
+            "concentration_mM": 100,
+            "ph": 1.0
+        }, 
+        "ZnCl2": {
+            "sourcePlate": "strID_vialRack_4",
+            "sourceWell": ["D1"],
+            "amount_mL": 15,
+            "concentration_mM": 100,
+            "ph": 1.0
+        },
+        "NiCl2": {
+            "sourcePlate": "strID_vialRack_4",
+            "sourceWell": ["A2"],
+            "amount_mL": 15,
+            "concentration_mM": 100,
+            "ph": 1.0
+        },
+        "KOH": {
+            "sourcePlate": "strID_vialRack_7",
+            "sourceWell": ["A1", "B1", "C1", "D1"],
+            "amount_mL": 15,
+            "concentration_mM": 100,
+            "ph": 1.0
+        }
+    },
+    "experimentWells": [
+      {
+        "wellIndex": 1,
+        "wellName": "A1",
+        "solutions": [],
+        "depositionCurrent_mA": -8,
+        "depositionDuration_s": 120, 
+        "temperature_C": 25
+      },
+      {
+        "wellIndex": 2,
+        "wellName": "B1",
+        "solutions": [
+          {
+            "solutionName": "FeCl3",
+            "solutionAmount_uL": 1667
+          }, 
+          {
+            "solutionName": "CrCl3",
+            "solutionAmount_uL": 1667
+          }, 
+          {
+            "solutionName": "ZnCl2",
+            "solutionAmount_uL": 1667
+          }
+        ],
+        "depositionCurrent_mA": -8,
+        "depositionDuration_s": 120,
+        "temperature_C": 25
+      },
+      {
+        "wellIndex": 3,
+        "wellName": "C1",
+        "solutions": [
+            {
+                "solutionName": "NiCl2",
+                "solutionAmount_uL": 2500
+            }, 
+            {
+              "solutionName": "CrCl3",
+              "solutionAmount_uL": 2500
+            }
+        ],
+        "depositionCurrent_mA": -2,
+        "depositionDuration_s": 240,
+        "temperature_C": 25
+      }
+    ]
+  }
+  
