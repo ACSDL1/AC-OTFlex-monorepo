@@ -1,0 +1,25 @@
+{
+  "system": {
+    "dry_run": false,
+    "verbose_logging": false
+  },
+  "opentrons": {
+    "controller_ip": "169.254.179.32",
+    "robot_type": "flex",
+    "move_speed": 150
+  },
+  "arm": {
+    "controller_ip": "192.168.1.113",
+    "port": 5001
+  },
+  "arduino": {
+    "fallback_port": "COM4",
+    "baud_rate": 115200,
+    "timeout_seconds": 300
+  },
+  "workflow": {
+    "enable_retry": true,
+    "max_retries": 2,
+    "default_timeout_seconds": 300
+  }
+}

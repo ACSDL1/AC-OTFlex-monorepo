@@ -1,0 +1,73 @@
+{
+  "comment": "Default configuration for AC_OTFlex_Workflow system. Edit and copy to config/ directory.",
+  "system": {
+    "dry_run": true,
+    "verbose_logging": true
+  },
+  "opentrons": {
+    "controller_ip": "169.254.179.32",
+    "robot_type": "flex",
+    "default_headers": {
+      "opentrons-version": "*"
+    },
+    "default_pipette": "flex_1channel_50",
+    "default_tiprack": "tiprack_200ul",
+    "move_speed": 150,
+    "aspirate_flowrate": 50,
+    "dispense_flowrate": 50
+  },
+  "arm": {
+    "controller_ip": "192.168.1.113",
+    "port": 5001,
+    "tcp_speed": 100,
+    "tcp_acceleration": 2000,
+    "angle_speed": 20,
+    "angle_acceleration": 500,
+    "enable_home_on_startup": true,
+    "safe_z_height": 50
+  },
+  "arduino": {
+    "comment": "Arduino configuration for furnace/thermal control",
+    "search_string": "CH340",
+    "fallback_port": "COM4",
+    "baud_rate": 115200,
+    "timeout_seconds": 300,
+    "cartridges": [0, 1],
+    "heater_setpoints": [15.0, 15.0],
+    "pump_calibration": {
+      "0": 1.594,
+      "1": 1.6,
+      "2": 1.574,
+      "3": 1.584,
+      "4": 1.636,
+      "5": 1.496
+    },
+    "pump_intercepts": {
+      "0": 0.0,
+      "1": 0.0,
+      "2": 0.0,
+      "3": 0.0,
+      "4": 0.0,
+      "5": 0.0
+    }
+  },
+  "workflow": {
+    "comment": "Workflow execution settings",
+    "default_dry_run_modules": {
+      "opentrons": "OTFLEX_WORKFLOW_Iliya_dryrun.py",
+      "arm": "myxArm_Utils_dryrun.py"
+    },
+    "enable_retry": true,
+    "max_retries": 2,
+    "retry_delay_seconds": 0.5,
+    "default_timeout_seconds": 300
+  },
+  "file_paths": {
+    "comment": "Default file paths (relative to project root)",
+    "workflows_dir": "data/workflows",
+    "labware_dir": "data/labware_definitions",
+    "device_configs_dir": "data/device_configs",
+    "config_dir": "config",
+    "logs_dir": "logs"
+  }
+}
