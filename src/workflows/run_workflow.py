@@ -19,8 +19,8 @@ from typing import Dict, Any, List, Tuple, Set, Optional
 from contextlib import asynccontextmanager
 
 # === 设备适配层 ===
-from adapters.otflex_adapter import OTFlex
-from adapters.arm_adapter import MyxArm
+from ..adapters.otflex_adapter import OTFlex
+from ..adapters.arm_adapter import MyxArm
 
 # ================ 工具 ================
 class ResourceLocks:
