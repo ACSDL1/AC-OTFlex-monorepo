@@ -1,0 +1,84 @@
+#################################################################
+#  Mosquitto Access Control List (ACL)
+#  Organized by user / device category
+#  - 'read'  : allows subscribing / receiving
+#  - 'write' : allows publishing
+#  - 'readwrite' = both
+#################################################################
+
+# === Controller (Python script) ============================
+user pyctl-controller
+topic write pyctl/status
+topic write pyctl/heartbeat
+
+# Controller can control all devices:
+topic write pumps/01/cmd/#
+topic write ultra/01/cmd/#
+topic write heat/01/cmd/#
+
+# Controller can read all states & telemetry:
+topic read pumps/01/#
+topic read ultra/01/#
+topic read heat/01/#
+topic read pyctl/#
+
+
+# === Pump ESP32 ===========================================
+user pump1
+# Device reads its command topics from controller
+topic read pumps/01/cmd/#
+
+# Device reports its own states and heartbeats
+topic write pumps/01/state/#
+topic write pumps/01/status
+topic write pumps/01/heartbeat
+topic write pumps/01/telemetry/#
+
+# Device must monitor controller health
+topic read pyctl/status
+topic read pyctl/heartbeat
+
+
+# === Ultrasonic ESP32 =====================================
+user ultra1
+# Receives control commands
+topic read ultra/01/cmd/#
+
+# Publishes state + health
+topic write ultra/01/state/#
+topic write ultra/01/status
+topic write ultra/01/heartbeat
+
+# Monitors controller beacon
+topic read pyctl/status
+topic read pyctl/heartbeat
+
+
+# === Heater ESP32 =========================================
+user heat1
+# Receives control commands
+topic read heat/01/cmd/#
+
+# Publishes sensor and system data
+topic write heat/01/state/#
+topic write heat/01/status
+topic write heat/01/heartbeat
+topic write heat/01/temp/#
+topic write heat/01/target/#
+
+# Monitors controller beacon
+topic read pyctl/status
+topic read pyctl/heartbeat
+
+
+#################################################################
+
+# Notes:
+# - '#' matches all subtopics.
+# - Each section starts with 'user <name>'.
+# - You can freely mix read / write / readwrite lines.
+# - The first matching rule encountered applies.
+# - If allow_anonymous false → any client must use a defined user/pass.
+
+#################################################################
+

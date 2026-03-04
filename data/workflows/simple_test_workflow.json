@@ -19,7 +19,7 @@
                 "params": {
                     "from": {
                         "labware": "source_plate",
-                        "well": "C2",
+                        "well": "A1",
                         "offsetX": 0,
                         "offsetY": 0,
                         "offsetZ": 5
@@ -36,8 +36,8 @@
                     "action": "liquid",
                     "volume_uL": 50,
                     "move_speed": 120,
-                    "pipette": "p50_single_flex",
-                    "tiprack": "tiprack_50ul"
+                    "pipette": "p1000_single_flex",
+                    "tiprack": "tiprack_1000ul"
                 }
             },
             {
@@ -84,28 +84,28 @@
                         "name": "single_electrode_module",
                         "display": "single_electrode_station",
                         "labware": "custom_single_electrode_station",
-                        "file": "labware\\sdl1_single_electrode_tiprack.json",
+                        "file": "data/labware_definitions/sdl1_single_electrode_tiprack.json",
                         "slot_label": "A1"
                     },
                     "A2": {
                         "name": "parallel_electrode_module",
                         "display": "parallel_electrode_station",
                         "labware": "custom_parallel_electrode_station",
-                        "file": "labware\\sdl1_parallel_electrode_tiprack.json",
+                        "file": "data/labware_definitions/sdl1_parallel_electrode_tiprack.json",
                         "slot_label": "A2"
                     },
                     "B1": {
                         "name": "destination_plate",
                         "display": "destination",
                         "labware": "actuated_reactor",
-                        "file": "labware\\actuated_reactor.json",
+                        "file": "data/labware_definitions/actuated_reactor.json",
                         "slot_label": "B1"
                     },
                     "B2": {
                         "name": "source_plate",
                         "display": "source",
                         "labware": "11_vials_20mL",
-                        "file": "labware\\sdl1_11_vials_20mL.json",
+                        "file": "data/labware_definitions/sdl1_11_vials_20mL.json",
                         "slot_label": "B2"
                     },
                     "C3": {
@@ -171,9 +171,6 @@
                     }
                 }
             }
-        },
-        "arm": {
-            "module": "myxArm_Utils.py"
         }
     }
 }

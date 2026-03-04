@@ -36,13 +36,33 @@ _root_dir = Path(__file__).parent.parent.parent
 if str(_root_dir) not in sys.path:
     sys.path.append(str(_root_dir))
 
-from utils.tip_tracker import TipTracker, id_to_well
+# Also add src directory for utils import
+_src_dir = Path(__file__).parent.parent
+if str(_src_dir) not in sys.path:
+    sys.path.insert(0, str(_src_dir))
 
-# Optional deps (default bundled client)
 try:
-    from opentrons import opentronsClient  # type: ignore
+    from utils.tip_tracker import TipTracker, id_to_well
+except ImportError:
+    try:
+        # Fallback: try with src prefix
+        from src.utils.tip_tracker import TipTracker, id_to_well
+    except ImportError:
+        # Create minimal stubs if module cannot be imported
+        class TipTracker:
+            def __init__(self, *args, **kwargs):
+                pass
+        def id_to_well(well_id):
+            return "A1"
+
+# Optional deps (prefer project client, then external package if compatible)
+try:
+    from src.core.opentrons import opentronsClient  # type: ignore
 except Exception:
-    opentronsClient = None  # type: ignore
+    try:
+        from opentrons import opentronsClient  # type: ignore
+    except Exception:
+        opentronsClient = None  # type: ignore
 
 try:
     import serial  # type: ignore
@@ -224,7 +244,27 @@ class _OTFlexRuntime:
                     # Try custom labware JSON if provided as absolute/relative path
                     path_hint = rec.get("file") or model
                     if isinstance(path_hint, str) and path_hint.endswith('.json'):
-                        lid = self.oc.loadCustomLabwareFromFile(slot, path_hint)
+                        norm_hint = path_hint.replace('\\', '/')
+                        hint_path = Path(norm_hint)
+                        if not hint_path.is_absolute():
+                            candidates = [
+                                (self.root_dir / hint_path),
+                                (Path.cwd() / hint_path),
+                            ]
+                            if hint_path.parts and hint_path.parts[0].lower() == 'labware':
+                                candidates.append(self.root_dir.parent / 'labware_definitions' / hint_path.name)
+                                candidates.append(Path.cwd() / 'data' / 'labware_definitions' / hint_path.name)
+
+                            chosen = None
+                            for cand in candidates:
+                                if cand.exists():
+                                    chosen = cand
+                                    break
+                            resolved_path = str(chosen) if chosen else norm_hint
+                        else:
+                            resolved_path = str(hint_path)
+
+                        lid = self.oc.loadCustomLabwareFromFile(slot, resolved_path)
                         if name:
                             self.lw_ids[name] = lid
                             print(f"[OTFlex][DEBUG] Registered custom labware name '{name}' -> ID '{lid}'")

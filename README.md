@@ -1,216 +1,77 @@
-# AC_OTFlex_Workflow - Automated Laboratory Workflow System
+# AC-OTFlex Monorepo
 
-An integrated system for coordinating automated laboratory equipment including Opentrons Flex liquid handling robot, UFactory xArm robotic arm, and Arduino-controlled furnace systems. Workflows are defined in JSON format and executed with support for parallel/sequential task execution.
+A unified self-driving lab automation system combining hardware control, MQTT communication, and workflow orchestration.
 
 **Language:** Primarily Python 3.8+
 
-## Quick Start
+## Project Overview
+
+AC-OTFlex is a modular automation platform for self-driving laboratories. This monorepo consolidates all components into a single, cohesive codebase:
+
+- **Backend**: Core Python control system with device abstractions
+- **Devices**: Modular IoT device libraries (Runze Pump, Heater, Furnace)
+- **Config**: Centralized MQTT broker and device configuration
+- **Docs**: System architecture, setup, and usage documentation
+- **Workflows**: Jupyter notebook-based experiment scripts and orchestration
+
+## Quick Start (2 minutes)
 
 ### Prerequisites
 - Python 3.8+
-- Opentrons Flex robot (IP: 169.254.179.32)
-- UFactory xArm robot (IP: 192.168.1.113)
-- Arduino-based furnace system (Serial: COM4)
+- MQTT broker installed and running
+- Hardware devices configured (Opentrons, Robot Arm, IoT devices)
 
 ### Installation
 
-1. **Clone repository:**
-   ```bash
-   git clone <repository-url>
-   cd AC_OTFlex_Workflow
-   ```
-
-2. **Create virtual environment:**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Configure system:**
-   ```bash
-   cp config/example_config.json config/user_config.json
-   # Edit config/user_config.json with your IP addresses and settings
-   ```
-
-### Running Tests
-
-Test individual components before running full workflows:
-
 ```bash
-# Test Opentrons connectivity
-python tests/test_opentrons.py --ip 169.254.179.32
+# 1. Navigate to project
+cd AC-OTFlex-monorepo
 
-# Test xArm connectivity
-python tests/test_arm.py --ip 192.168.1.113 --dry-run
+# 2. Create virtual environment
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# Test Arduino furnace
-python tests/test_furnace.py --port COM4 --dry-run
+# 3. Install dependencies
+pip install -r requirements.txt
 
-# Test workflow parsing
-python tests/test_workflows.py --workflow data/workflows/simple_test_workflow.json
-
-# Run all tests
-python tests/run_all_tests.py --dry-run
+# 4. Copy and edit configuration
+cp config/example_config.json config/user_config.json
+# Edit IPs/ports in user_config.json
 ```
 
-### Running Workflows
+### Testing (1 minute)
+
+```bash
+# Test all components (dry-run, no hardware needed)
+python tests/run_all_tests.py --dry-run
+
+# Test individual components
+python tests/test_opentrons.py --test connection
+python tests/test_arm.py --test availability --dry-run
+python tests/test_furnace.py --test find-port
+```
+
+### Running Workflows (1 minute)
 
 ```bash
 # List available workflows
 python tests/test_workflows.py --test list
 
-# Execute a workflow (dry-run mode)
+# Dry-run a workflow
 python src/workflows/run_workflow.py --json data/workflows/simple_test_workflow.json --dry-run
 
-# Execute a workflow (production mode)
+# Production execution
 python src/workflows/run_workflow.py --json data/workflows/completeflexelectrodep_workflow-FILLED.json
 ```
 
-## Directory Structure
-
-```
-AC_OTFlex_Workflow/
-├── src/                           # Main source code
-│   ├── core/                      # Core runtime modules
-│   │   ├── opentrons.py          # Opentrons Flex client
-│   │   ├── myxArm_Utils.py       # xArm robot utilities
-│   │   ├── myxArm_Utils_dryrun.py # xArm dry-run mode
-│   │   ├── arm_runtime.py        # ARM runtime wrapper
-│   │   └── otflex_runtime.py     # Opentrons runtime wrapper
-│   ├── adapters/                  # Device adapters (parameter normalization)
-│   │   ├── otflex_adapter.py     # Opentrons adapter
-│   │   └── arm_adapter.py        # ARM adapter
-│   ├── workflows/                 # Workflow execution engine
-│   │   ├── run_workflow.py       # Main workflow orchestrator
-│   │   ├── OTFLEX_WORKFLOW_Iliya.py      # Live workflow
-│   │   └── OTFLEX_WORKFLOW_Iliya_dryrun.py # Dry-run workflow
-│   ├── __init__.py
-│   └── config_manager.py         # Configuration management
-│
-├── config/                        # Configuration files
-│   ├── default_config.json       # Default configuration
-│   ├── example_config.json       # Example configuration
-│   └── experimentParams.json     # Experiment parameters
-│
-├── data/                          # Data files and definitions
-│   ├── workflows/                 # Workflow definitions (JSON)
-│   │   ├── simple_test_workflow.json
-│   │   ├── completeflexelectrodep_workflow-FILLED.json
-│   │   ├── reactor.json
-│   │   ├── parallelTest.json
-│   │   ├── furnaceTest.json
-│   │   └── completeTest.json
-│   ├── labware_definitions/       # Opentrons labware definitions
-│   ├── device_configs/            # Device-specific configurations
-│   ├── params.csv                 # Experiment parameters
-│   └── sources.csv                # Chemical source definitions
-│
-├── tests/                         # Test scripts for components
-│   ├── test_opentrons.py         # Opentrons connectivity tests
-│   ├── test_arm.py               # ARM connectivity tests
-│   ├── test_furnace.py           # Arduino furnace tests
-│   ├── test_workflows.py         # Workflow execution tests
-│   └── run_all_tests.py          # Master test runner
-│
-├── scripts/                       # Utility and maintenance scripts
-│   ├── fix_indentation.py        # Code formatting utility
-│   ├── test_imports.py           # Dependency verification
-│   ├── inspect_workflow.py       # Workflow inspection tool
-│   ├── gripper_tuner.py          # Gripper tuning utility
-│   └── archived_potentiostat/    # Old potentiostat code
-│
-├── docs/                          # Documentation
-│   ├── ARCHITECTURE.md           # System architecture
-│   ├── SETUP.md                  # Setup instructions
-│   ├── USAGE.md                  # Usage guide
-│   └── CONTRIBUTING.md           # Contributing guidelines
-│
-├── README.md                      # This file
-├── .gitignore                     # Git ignore rules
-├── requirements.txt               # Python dependencies
-└── .venv/                         # Virtual environment (not tracked)
-```
-
-## System Architecture
-
-The system follows a **layered architecture** for clean separation of concerns:
-
-```
-┌─────────────────────────┐
-│   Workflow JSON File    │
-└────────────┬────────────┘
-             │
-             ▼
-┌──────────────────────────────┐
-│  WorkflowRunner              │
-│  (Parsing & Orchestration)   │
-└────────────┬─────────────────┘
-             │
-    ┌────────┴────────┐
-    ▼                 ▼
-┌─────────────┐   ┌──────────────┐
-│ OTFlex      │   │ MyxArm       │
-│ Adapter     │   │ Adapter      │
-│ (normalize) │   │ (normalize)  │
-└────────────┬┘   └──────────┬───┘
-             │               │
-    ┌────────▼───────────────▼┐
-    │   Device Runtimes       │
-    │ (otflex_runtime.py,     │
-    │  arm_runtime.py)        │
-    └────────┬───────────────┬┘
-             │               │
-    ┌────────▼────┐   ┌──────▼──────┐
-    │  opentrons  │   │ myxArm      │
-    │  (hardware) │   │ (hardware)  │
-    └─────────────┘   └─────────────┘
-```
-
-## Configuration Management
-
-All hardcoded values have been extracted to configuration files:
-
-### Opentrons Configuration
-- **IP Address:** `config.opentrons.controller_ip` (default: 169.254.179.32)
-- **Robot Type:** `config.opentrons.robot_type` (default: flex)
-- **Pipette Settings:** Move speed, aspirate/dispense flow rates
-- **Deck Layout:** Configured in workflow JSON
-
-### ARM Configuration
-- **IP Address:** `config.arm.controller_ip` (default: 192.168.1.113)
-- **Port:** `config.arm.port` (default: 5001)
-- **Motion Parameters:** TCP speed, acceleration, angle parameters
-
-### Arduino Configuration
-- **Port:** `config.arduino.fallback_port` (default: COM4)
-- **Baud Rate:** `config.arduino.baud_rate` (default: 115200)
-- **Pump Calibration:** Per-pump slope and intercept values
-- **Heater Setpoints:** Per-cartridge temperature settings
-
-### Usage
-```python
-from src.config_manager import get_config
-
-config = get_config()
-otflex_ip = config.get("opentrons.controller_ip")
-arm_ip = config.get("arm.controller_ip")
-```
-
-## Workflow Format
-
-Workflows are defined in JSON with the following structure:
+### Creating a Simple Workflow
 
 ```json
 {
   "workflow": {
     "nodes": [
       {
-        "id": "transfer_1",
+        "id": "transfer_sample",
         "type": "otflexTransfer",
         "params": {
           "from": {"labware": "source", "well": "A1"},
@@ -219,105 +80,210 @@ Workflows are defined in JSON with the following structure:
         }
       }
     ],
-    "edges": [
-      {
-        "source": "transfer_1",
-        "target": "transfer_2",
-        "metadata": {"parallel": false}
-      }
-    ]
-  },
-  "devices": {
-    "otflex": {...},
-    "arm": {...}
+    "edges": []
   }
 }
 ```
 
-## Testing
+Save as `data/workflows/my_workflow.json` and run:
+```bash
+python src/workflows/run_workflow.py --json data/workflows/my_workflow.json --dry-run
+```
 
-The project includes comprehensive test suites for each component:
+## Documentation Index
+
+| Document | Purpose |
+|----------|---------|
+| [docs/SETUP.md](docs/SETUP.md) | Installation and configuration |
+| [docs/USAGE.md](docs/USAGE.md) | Workflow creation and execution |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design and layers |
+| [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | Development guidelines |
+| [config/mqtt/README.md](config/mqtt/README.md) | MQTT broker setup |
+
+## Common Commands
 
 ```bash
-# Test individual components
-python tests/test_opentrons.py --test connection
-python tests/test_arm.py --test availability
+# Run all tests
+python tests/run_all_tests.py --dry-run
+
+# Test specific component
+python tests/test_opentrons.py --test all
+python tests/test_arm.py --test all --dry-run
 python tests/test_furnace.py --test calibration
-python tests/test_workflows.py --test json-validation
 
-# Run full test suite
-python tests/run_all_tests.py --dry-run
+# Validate workflow JSON
+python tests/test_workflows.py --test json-validation --workflow data/workflows/my_workflow.json
 
-# Test with specific configuration
-python tests/test_opentrons.py --ip 169.254.179.32 --test all
+# Run workflow (dry-run)
+python src/workflows/run_workflow.py --json data/workflows/my_workflow.json --dry-run
+
+# Get help
+python tests/test_opentrons.py --help
+python src/workflows/run_workflow.py --help
 ```
 
-## Dry-Run Mode
+## Configuration
 
-All components support dry-run mode for testing without hardware:
+Edit `config/user_config.json` for your setup:
 
+```json
+{
+  "opentrons": {
+    "controller_ip": "192.168.1.X"
+  },
+  "arm": {
+    "controller_ip": "192.168.1.Y"
+  },
+  "arduino": {
+    "fallback_port": "COM4"
+  }
+}
+```
+
+## Troubleshooting
+
+### Can't import modules?
 ```bash
-# Dry-run test
-python tests/run_all_tests.py --dry-run
+# Verify installation
+pip install -r requirements.txt
 
-# Dry-run workflow execution
-python src/workflows/run_workflow.py --json data/workflows/simple_test_workflow.json --dry-run
+# Check Python path
+python -c "import sys; print(sys.path)"
 ```
 
-## Common Issues
+### Can't find robot?
+```bash
+# Test connectivity
+python tests/test_opentrons.py --test connection
+python tests/test_arm.py --test availability --dry-run
+python tests/test_furnace.py --test find-port
+```
 
-### Cannot connect to Opentrons Flex
-- Check IP address: 169.254.179.32 (auto-assigned, may vary)
-- Verify network connection to robot
-- Check firewall settings
-- Run: `python tests/test_opentrons.py --test connection`
+### JSON validation error?
+```bash
+# Validate workflow
+python tests/test_workflows.py --test json-validation --workflow your_workflow.json
+```
 
-### Cannot connect to xArm
-- Check xArm is powered on and connected to network
-- Verify IP address (usually 192.168.1.113)
-- Check port 5001 is open
-- Ensure xArm SDK is installed: `pip install xarm-python-sdk`
+## Directory Structure
 
-### Arduino not found
-- Check serial port: `python tests/test_furnace.py --test find-port`
-- Common Windows ports: COM3, COM4, COM5
-- Common Linux ports: /dev/ttyUSB0, /dev/ttyACM0
+```
+AC-OTFlex-monorepo/
+├── backend/                       # Main control system
+│   ├── src/                       # Python libraries
+│   │   ├── controller/           # MQTT & workflow execution
+│   │   ├── devices/              # High-level device abstractions
+│   │   └── utils/                # Utilities
+│   ├── workflows/                # Jupyter notebooks for experiments
+│   ├── tests/                    # Test suite
+│   ├── requirements.txt          # Backend dependencies
+│   └── README.md
+│
+├── devices/                       # IoT device modules
+│   ├── runze-pump/               # Peristaltic pump
+│   │   ├── src/
+│   │   ├── firmware/
+│   │   ├── mechanical/
+│   │   ├── electrical/
+│   │   └── documentation/
+│   ├── heater/                   # Temperature control
+│   │   ├── src/
+│   │   ├── firmware/
+│   │   ├── mechanical/
+│   │   ├── electrical/
+│   │   └── documentation/
+│   ├── furnace/                  # Furnace control
+│   │   ├── src/
+│   │   ├── firmware/
+│   │   ├── mechanical/
+│   │   ├── electrical/
+│   │   └── documentation/
+│   └── README.md
+│
+├── config/                        # System configuration
+│   ├── mqtt/                     # MQTT broker configuration
+│   ├── device_configs/           # Device parameter files
+│   ├── experiment_params/        # Experiment parameter files
+│   └── README.md
+│
+├── data/                          # Workflows and datasets
+│   ├── workflows/                # Workflow JSON files
+│   ├── device_configs/           # Device definitions
+│   └── labware_definitions/      # Opentrons labware
+│
+├── docs/                          # Documentation
+│   ├── ARCHITECTURE.md           # System design
+│   ├── SETUP.md                  # Installation guide
+│   ├── USAGE.md                  # Usage guide
+│   ├── CONTRIBUTING.md           # Contribution guidelines
+│   ├── workflows/                # Workflow documentation
+│   ├── api/                      # API references
+│   └── README.md
+│
+├── scripts/                       # Build & utility scripts
+│   ├── utilities/                # Helpers and build tools
+│   ├── archived/                 # Legacy scripts
+│   └── README.md
+│
+├── src/                           # General source code
+│   ├── adapters/                 # Device adapters
+│   ├── core/                     # Runtime modules
+│   └── workflows/                # Workflow orchestration
+│
+├── tests/                         # Test suite
+├── README.md                      # This file
+├── QUICK_START.md                 # Quick reference guide
+├── .gitignore
+├── requirements.txt               # Top-level dependencies
+└── CONTRIBUTING.md
+```
 
-### Module import errors
-- Run `pip install -r requirements.txt`
-- Verify Python version >= 3.8
-- Check all __init__.py files are present in src/ subdirectories
+## Device Modules
 
-## Workflow Examples
+Each IoT device is self-contained with its own importable library:
 
-### Simple Liquid Transfer
-See `data/workflows/simple_test_workflow.json`
+```python
+from devices.runze_pump.src import RunzePump
+from devices.heater.src import Heater
+from devices.furnace.src import Furnace
+```
 
-### Complete Electrodeposition
-See `data/workflows/completeflexelectrodep_workflow-FILLED.json`
+## Backend Device Abstractions
 
-### Parallel Operations
-See `data/workflows/parallelTest.json`
+High-level device interfaces for Opentrons and Robot Arm:
 
-### Furnace Control
-See `data/workflows/furnaceTest.json`
+```python
+from src.devices.opentrons import pickup_plate, dispense, transfer
+from src.devices.robot_arm import move, grip, release, position
+```
 
-## Documentation
+## Key Features
 
-- [Architecture](docs/ARCHITECTURE.md) - System design and components
-- [Setup Guide](docs/SETUP.md) - Installation and configuration
-- [Usage Guide](docs/USAGE.md) - How to use the system
-- [Contributing](docs/CONTRIBUTING.md) - Contributing guidelines
+✅ **Organized Structure** - Files grouped logically  
+✅ **Configuration Management** - Centralized settings  
+✅ **Comprehensive Tests** - Test without hardware (dry-run mode)  
+✅ **Full Documentation** - Setup, usage, architecture, contributing  
+✅ **Clean Git** - Proper .gitignore included  
+✅ **Python Packages** - Proper module structure with __init__.py  
+✅ **Modular Design** - Easy to extend with new devices/adapters  
+✅ **Type Hints** - Better IDE support and code documentation  
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## Getting Help
+
+1. Read [docs/SETUP.md](docs/SETUP.md) for installation issues
+2. Read [docs/USAGE.md](docs/USAGE.md) for workflow questions
+3. Run tests with `--dry-run` for debugging
+4. Check component READMEs for device-specific help
 
 ## License
 
-[Add your license information here]
-
-## Contact
-
-[Add contact information here]
+_To be added_
 
 ## Version History
 
-- **v1.0.0** (Feb 2026) - Initial organized release with comprehensive documentation
+- **v0.1.0** (March 2026) - Monorepo reorganization from separate repositories
 

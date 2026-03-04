@@ -19,9 +19,32 @@ class OTFlex:
         self.root_dir = root_dir
         # 允许通过 devices.otflex.module 指定加载的模块文件（默认 dryrun）
         module_file = self.device_cfg.get("module") or "OTFLEX_WORKFLOW_Iliya_dryrun.py"
-        mod_path = self.root_dir / module_file
-        if not mod_path.exists():
-            raise FileNotFoundError(f"OTFlex module not found: {mod_path}")
+        
+        # Search in multiple locations for flexibility
+        search_paths = [
+            self.root_dir / module_file,  # Workflow directory (preferred)
+            Path(__file__).parent.parent / "core" / module_file,  # src/core/
+            Path(__file__).parent.parent / "workflows" / module_file,  # src/workflows/
+        ]
+        
+        # Try to resolve relative imports like "../src/core/module.py"
+        if module_file.startswith(".."):
+            abs_path = (self.root_dir / module_file).resolve()
+            if abs_path.exists():
+                search_paths.insert(0, abs_path)
+        
+        mod_path = None
+        for path in search_paths:
+            if path.exists():
+                mod_path = path
+                break
+        
+        if not mod_path:
+            raise FileNotFoundError(
+                f"OTFlex module '{module_file}' not found in:\n  " + 
+                "\n  ".join(str(p) for p in search_paths)
+            )
+        
         self.mod = _load_module(mod_path)
         print(f"[OTFlex] Loaded module: {mod_path}")
 

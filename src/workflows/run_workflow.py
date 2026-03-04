@@ -65,13 +65,14 @@ async def with_retry(coro_func, *, retries=0, timeout=None, retry_delay=0.5, des
 
 # ================ 调度器 ================
 class WorkflowRunner:
-    def __init__(self, wf: Dict[str, Any], root_dir: Path):
+    def __init__(self, wf: Dict[str, Any], root_dir: Path, use_arm: bool = True):
         self.wf = wf
         self.root_dir = root_dir
         self.nodes_by_id = {n["id"]: n for n in wf["workflow"]["nodes"]}
         self.edges = wf["workflow"]["edges"]
         self.metadata = wf["workflow"].get("executionMetadata", {})
         self.resources = ResourceLocks()
+        self.use_arm = use_arm
 
         # 设备实例（根据 JSON metadata.devices 初始化）
         devices_meta = wf.get("devices", {})
@@ -87,7 +88,15 @@ class WorkflowRunner:
             except Exception as e:
                 print(f"[Workflow][WARN] failed to load otflex_file {otflex_ref}: {e}")
         self.otflex = OTFlex(otflex_cfg, root_dir=root_dir)
-        self.arm = MyxArm(devices_meta.get("arm", {}), root_dir=root_dir)
+
+        arm_cfg = devices_meta.get("arm", {}) or {}
+        arm_enabled_in_cfg = arm_cfg.get("enabled", True)
+        self.use_arm = bool(self.use_arm and arm_enabled_in_cfg)
+        self.arm: Optional[MyxArm] = None
+        if self.use_arm:
+            self.arm = MyxArm(arm_cfg, root_dir=root_dir)
+        else:
+            print("[Workflow] Arm disabled (CLI or config).")
 
     # 拓扑 + 并行执行
     def _build_graph(self):
@@ -108,7 +117,8 @@ class WorkflowRunner:
     async def run(self):
         # 连接设备（如需要）
         await self.otflex.connect()
-        await self.arm.connect()
+        if self.use_arm and self.arm is not None:
+            await self.arm.connect()
 
         parents, children, edge_props = self._build_graph()
         ready: Set[str] = set(self._roots(parents))
@@ -173,7 +183,8 @@ class WorkflowRunner:
                     ready.add(nid)
 
         # 断开设备
-        await self.arm.disconnect()
+        if self.use_arm and self.arm is not None:
+            await self.arm.disconnect()
         await self.otflex.disconnect()
         print("[Workflow] All done.")
 
@@ -241,6 +252,9 @@ class WorkflowRunner:
                 print(f"[OTFlex] Unknown type: {ntype}")
 
     async def _run_arm(self, ntype: str, p: Dict[str, Any], locks: List[str]):
+        if not self.use_arm or self.arm is None:
+            print(f"[Arm] Skipped node {ntype} because arm is disabled.")
+            return
         async with self.resources.acquire_many(locks):
             key = ntype.lower()
             if "run" in key or "sequence" in key:
@@ -261,10 +275,11 @@ class WorkflowRunner:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--json", required=True, help="Path to Canvas FILLED JSON")
+    ap.add_argument("--no-arm", action="store_true", help="Disable arm initialization and arm nodes")
     args = ap.parse_args()
 
     wf = json.loads(Path(args.json).read_text(encoding="utf-8"))
-    runner = WorkflowRunner(wf, root_dir=Path(args.json).parent)
+    runner = WorkflowRunner(wf, root_dir=Path(args.json).parent, use_arm=(not args.no_arm))
 
     asyncio.run(runner.run())
 
