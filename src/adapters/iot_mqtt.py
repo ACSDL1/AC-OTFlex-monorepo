@@ -19,7 +19,7 @@ import time
 from datetime import datetime
 from typing import Callable, Final, Iterable, Optional
 
-from paho.mqtt import client as mqtt
+from paho.mqtt import client as mqtt  # type: ignore[import]
 
 # -----------------------------------------------------------------------------
 # Global device counts (single source of truth for loops / safety shutdowns)

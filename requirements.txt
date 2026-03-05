@@ -6,6 +6,7 @@ requests>=2.28.0          # HTTP client for Opentrons API
 pyserial>=3.5             # Arduino serial communication
 pandas>=1.4.0             # Data handling and CSV processing
 numpy>=1.23.0             # Numerical computing
+paho-mqtt>=1.6            # MQTT client for IoT device communication
 
 # xArm robot control (optional but recommended)
 xarm-python-sdk>=1.13.0   # UFactory xArm SDK
