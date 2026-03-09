@@ -33,6 +33,13 @@
 #define HEATER_MAX 100    // PID output upper limit (% slow-PWM)
 #define HEATER_MIN 0      // PID output lower limit
 
+// Warmup/chatter tuning
+const float PID_BANGBANG_C        = 5.0f;   // full ON/OFF outside ±window
+const uint32_t PID_TIMESTEP_MS    = 2000;   // slower updates reduce relay chatter
+const float FULL_POWER_ERROR_C    = 5.0f;   // if below setpoint by this much -> 100%
+const float MIN_PWM_ERROR_C       = 2.0f;   // apply minimum PWM only when this far below
+const int   MIN_HEATING_PWM       = 35;     // avoid tiny duty cycles that stutter heating
+
 /************ Thermistor constants ************/
 #define RC     10000.0    // Fixed resistor in divider (ohms)
 #define VCC    3.3        // Reference for divider math
@@ -226,7 +233,18 @@ void _setPWM(uint8_t ch, int dutyPercent) {
   if (!ensureRelay()) return;
   if (dutyPercent < 0) dutyPercent = 0;
   if (dutyPercent > 100) dutyPercent = 100;
-  relay.setSlowPWM(ch, dutyPercent);
+  
+  // Use solid ON/OFF at extremes, PWM only for partial duty
+  if (dutyPercent == 100) {
+    relay.setSlowPWM(ch, 0);      // Stop PWM first!
+    relay.turnRelayOn(ch);         // Then solid ON, no blinking
+  } else if (dutyPercent == 0) {
+    relay.setSlowPWM(ch, 0);      // Stop PWM
+    relay.turnRelayOff(ch);        // Then solid OFF
+  } else {
+    relay.setSlowPWM(ch, dutyPercent);  // PWM for 1-99%
+  }
+  
   heaterPWM[ch] = dutyPercent;
 
   bool on = (dutyPercent > 0);
@@ -524,8 +542,8 @@ void setup() {
   for (uint8_t i = 1; i <= HEATER_COUNT; i++) {
     pid[i] = new AutoPID(&pidInput[i], &pidSetpoint[i], &pidOutput[i],
                          HEATER_MIN, HEATER_MAX, Kp, Ki, Kd);
-    pid[i]->setBangBang(2);     // ±2°C
-    pid[i]->setTimeStep(1000);  // 1 s
+    pid[i]->setBangBang(PID_BANGBANG_C);
+    pid[i]->setTimeStep(PID_TIMESTEP_MS);
   }
 
   mqtt.setServer(MQTT_BROKER_IP, MQTT_PORT);
@@ -586,13 +604,46 @@ void loop() {
   }
 
   // --- PID control if enabled ---
+  static uint32_t lastPidLog[HEATER_COUNT + 1] = {0};
+  
   for (uint8_t ch = 1; ch <= HEATER_COUNT; ch++) {
     if (pidEnabled[ch]) {
       if (isfinite(filtTemp[ch])) {
         pidInput[ch]   = filtTemp[ch];
         pidSetpoint[ch]= setTarget[ch];
         pid[ch]->run();                      // updates pidOutput[ch]
-        _setPWM(ch, (int)pidOutput[ch]);    // internal setter
+
+        double err = pidSetpoint[ch] - pidInput[ch];
+        int pwmCmd = (int)pidOutput[ch];
+        int pwmOriginal = pwmCmd;            // store original PID decision
+        const char* override = "";
+
+        // Keep full power while far from target to maximize warmup speed.
+        if (err >= FULL_POWER_ERROR_C) {
+          pwmCmd = 100;
+          override = " [FULL_POWER]";
+        }
+        // Avoid tiny duty cycles when still materially below setpoint.
+        else if (err >= MIN_PWM_ERROR_C && pwmCmd > 0 && pwmCmd < MIN_HEATING_PWM) {
+          pwmCmd = MIN_HEATING_PWM;
+          override = " [PWM_FLOOR]";
+        }
+
+        // Debug telemetry: log PID decisions every 1s
+        if (now - lastPidLog[ch] > 1000) {
+          lastPidLog[ch] = now;
+          Serial.printf("[PID_CH%u] temp=%.1f°C | target=%.1f°C | error=%.2f°C | PID=%d%% -> PWM=%d%%%s\n",
+                        ch, 
+                        filtTemp[ch], 
+                        pidSetpoint[ch], 
+                        err,
+                        pwmOriginal,
+                        pwmCmd,
+                        override
+          );
+        }
+
+        _setPWM(ch, pwmCmd);                // internal setter
         if (heaterPWM[ch] > 0) lastPwmTime[ch] = now;
       } else {
         _setPWM(ch, 0);                      // sensor bad -> off
