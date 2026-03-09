@@ -275,6 +275,7 @@ def _best_effort_all_off(
     pumps: Optional["PumpMQTT"] = None,
     ultra: Optional["UltraMQTT"] = None,
     heat: Optional["HeatMQTT"] = None,
+    reactor: Optional["ReactorMQTT"] = None,
 ) -> None:
     """Try to turn every output OFF on clean shutdown (best-effort)."""
     try:
@@ -304,6 +305,12 @@ def _best_effort_all_off(
                     time.sleep(0.02)
                 except Exception:
                     pass
+        if reactor:
+            try:
+                reactor.stop()
+                time.sleep(0.02)
+            except Exception:
+                pass
     except Exception:
         pass
 
@@ -680,6 +687,32 @@ class HeatMQTT(_BaseDevice):
                + [f"{self.base}/set/{i}"  for i in range(1, HEAT_COUNT + 1)] \
                + [f"{self.base}/pwm/{i}"  for i in range(1, HEAT_COUNT + 1)] \
                + [f"{self.base}/temp/{i}" for i in range(1, HEAT_COUNT + 1)]
+        super().status(topics, seconds)
+
+
+class ReactorMQTT(_BaseDevice):
+    """Controls reactor linear actuator with forward/reverse motion."""
+
+    def forward(self, duration_ms: Optional[int] = None) -> None:
+        """Move reactor FORWARD (optionally auto-STOP after duration_ms)."""
+        cmd = "FORWARD" if duration_ms is None else f"FORWARD:{duration_ms}"
+        self._publish("cmd/1", cmd, retain=False)
+
+    def reverse(self, duration_ms: Optional[int] = None) -> None:
+        """Move reactor REVERSE (optionally auto-STOP after duration_ms)."""
+        cmd = "REVERSE" if duration_ms is None else f"REVERSE:{duration_ms}"
+        self._publish("cmd/1", cmd, retain=False)
+
+    def stop(self) -> None:
+        """Stop reactor motion."""
+        self._publish("cmd/1", "STOP", retain=False)
+
+    def status(self, seconds: float = 3.0) -> None:
+        topics = [
+            f"{self.base}/status",
+            f"{self.base}/heartbeat",
+            f"{self.base}/state/1",
+        ]
         super().status(topics, seconds)
 
 
