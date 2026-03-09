@@ -354,7 +354,8 @@ class _OTFlexRuntime:
                     print('[OTFlex][WARN] pick tip failed:', e)
 
         # naive sequence
-        repeats = len(to_well) if isinstance(to_well, list) else 1
+        to_well_list = to_well if isinstance(to_well, list) else [to_well]
+        repeats = len(to_well_list)
         for i in range(repeats):
             print(f"[OTFlex] transfer cycle {i+1}/{repeats}, moving to {from_lw}.{from_well}")
             # Move to source with safe transit height
@@ -362,9 +363,9 @@ class _OTFlexRuntime:
             # Aspirate at specified depth
             asp(from_lw, from_well, vol, fdX, fdY, fdZ)
             # Move to destination with safe transit height
-            mv(to_lw, to_well[i], tdX, tdY, 0)
+            mv(to_lw, to_well_list[i], tdX, tdY, 0)
             # Dispense at specified depth
-            dsp(to_lw, to_well[i], vol, tdX, tdY, tdZ)
+            dsp(to_lw, to_well_list[i], vol, tdX, tdY, tdZ)
 
         # drop tip to trash if available
         if p.get('autopick_tip', True):

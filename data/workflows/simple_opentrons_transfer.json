@@ -19,22 +19,22 @@
         "params": {
           "from": {
             "labware": "source_plate",
-            "well": "C2",
+            "well": "B2",
             "offsetX": 0,
             "offsetY": 0,
             "offsetZ": 5
           },
           "to": {
             "labware": "destination_plate",
-            "well": "A1",
+            "well": "B1",
             "offsetX": 0,
             "offsetY": 0,
             "offsetZ": 20
           },
-          "volume_uL": 50,
+          "volume_uL": 500,
           "move_speed": 120,
-          "pipette": "p50_single_flex",
-          "tiprack": "tiprack_50ul"
+          "pipette": "p1000_single_flex",
+          "tiprack": "tiprack_1000ul"
         }
       },
       {
@@ -83,17 +83,16 @@
             "file": "data/labware_definitions/sdl1_11_vials_20mL.json",
             "slot_label": "B2"
           },
-          "D2": {
-            "name": "tiprack_50ul",
-            "display": "tiprack_50ul",
-            "labware": "opentrons_flex_96_tiprack_50ul",
-            "slot_label": "D2"
+          "C3": {
+            "name": "tiprack_1000ul",
+            "display": "tiprack_1000ul",
+            "labware": "opentrons_flex_96_tiprack_1000ul",
+            "slot_label": "C3"
           }
         },
         "pipettes": {
-          "left": {
-            "model": "p50_single_flex",
-            "mount": "left"
+          "right": {
+            "model": "p1000_single_flex"
           }
         }
       }
