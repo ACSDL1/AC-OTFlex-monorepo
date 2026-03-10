@@ -16,12 +16,14 @@ topic write pumps/01/cmd/#
 topic write ultra/01/cmd/#
 topic write heat/01/cmd/#
 topic write reactor/01/cmd/#
+topic write furnace/01/cmd/#
 
 # Controller can read all states & telemetry:
 topic read pumps/01/#
 topic read ultra/01/#
 topic read heat/01/#
 topic read reactor/01/#
+topic read furnace/01/#
 topic read pyctl/#
 
 
@@ -82,6 +84,21 @@ topic read reactor/01/cmd/#
 topic write reactor/01/state/#
 topic write reactor/01/status
 topic write reactor/01/heartbeat
+
+# Monitors controller beacon
+topic read pyctl/status
+topic read pyctl/heartbeat
+
+
+# === Furnace ESP32 ========================================
+user furnace1
+# Receives control commands
+topic read furnace/01/cmd/#
+
+# Publishes state and system data
+topic write furnace/01/state/#
+topic write furnace/01/status
+topic write furnace/01/heartbeat
 
 # Monitors controller beacon
 topic read pyctl/status

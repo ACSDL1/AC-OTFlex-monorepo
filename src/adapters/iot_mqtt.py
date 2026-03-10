@@ -276,6 +276,7 @@ def _best_effort_all_off(
     ultra: Optional["UltraMQTT"] = None,
     heat: Optional["HeatMQTT"] = None,
     reactor: Optional["ReactorMQTT"] = None,
+    furnace: Optional["FurnaceMQTT"] = None,
 ) -> None:
     """Try to turn every output OFF on clean shutdown (best-effort)."""
     try:
@@ -308,6 +309,12 @@ def _best_effort_all_off(
         if reactor:
             try:
                 reactor.stop()
+                time.sleep(0.02)
+            except Exception:
+                pass
+        if furnace:
+            try:
+                furnace.stop()
                 time.sleep(0.02)
             except Exception:
                 pass
@@ -705,6 +712,32 @@ class ReactorMQTT(_BaseDevice):
 
     def stop(self) -> None:
         """Stop reactor motion."""
+        self._publish("cmd/1", "STOP", retain=False)
+
+    def status(self, seconds: float = 3.0) -> None:
+        topics = [
+            f"{self.base}/status",
+            f"{self.base}/heartbeat",
+            f"{self.base}/state/1",
+        ]
+        super().status(topics, seconds)
+
+
+class FurnaceMQTT(_BaseDevice):
+    """Controls furnace door linear actuator with open/close motion."""
+
+    def open(self, duration_ms: Optional[int] = None) -> None:
+        """Open furnace door (optionally auto-STOP after duration_ms)."""
+        cmd = "OPEN" if duration_ms is None else f"OPEN:{duration_ms}"
+        self._publish("cmd/1", cmd, retain=False)
+
+    def close(self, duration_ms: Optional[int] = None) -> None:
+        """Close furnace door (optionally auto-STOP after duration_ms)."""
+        cmd = "CLOSE" if duration_ms is None else f"CLOSE:{duration_ms}"
+        self._publish("cmd/1", cmd, retain=False)
+
+    def stop(self) -> None:
+        """Stop furnace door motion."""
         self._publish("cmd/1", "STOP", retain=False)
 
     def status(self, seconds: float = 3.0) -> None:
