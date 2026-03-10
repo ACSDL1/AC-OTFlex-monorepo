@@ -7,8 +7,10 @@ pyserial>=3.5             # Arduino serial communication
 pandas>=1.4.0             # Data handling and CSV processing
 numpy>=1.23.0             # Numerical computing
 paho-mqtt>=1.6            # MQTT client for IoT device communication
+paramiko>=3.0.0           # SSH client for remote Raspberry Pi control
+Pillow>=10.0.0            # PIL image processing for notebook image rotation
 
-# xArm robot control (optional but recommended)
+# xArm robot control
 xarm-python-sdk>=1.13.0   # UFactory xArm SDK
 
 # Development and testing (optional)
