@@ -21,6 +21,7 @@ from contextlib import asynccontextmanager
 # === 设备适配层 ===
 from ..adapters.otflex_adapter import OTFlex
 from ..adapters.arm_adapter import MyxArm
+from ..adapters.potentiostat_adapter import PotentiostatAdapter
 
 # ================ 工具 ================
 class ResourceLocks:
@@ -88,6 +89,8 @@ class WorkflowRunner:
             except Exception as e:
                 print(f"[Workflow][WARN] failed to load otflex_file {otflex_ref}: {e}")
         self.otflex = OTFlex(otflex_cfg, root_dir=root_dir)
+        potentiostat_cfg = devices_meta.get("potentiostat", {}) or {}
+        self.potentiostat = PotentiostatAdapter(potentiostat_cfg, root_dir=root_dir)
 
         arm_cfg = devices_meta.get("arm", {}) or {}
         arm_enabled_in_cfg = arm_cfg.get("enabled", True)
@@ -117,6 +120,7 @@ class WorkflowRunner:
     async def run(self):
         # 连接设备（如需要）
         await self.otflex.connect()
+        await self.potentiostat.connect()
         if self.use_arm and self.arm is not None:
             await self.arm.connect()
 
@@ -185,6 +189,7 @@ class WorkflowRunner:
         # 断开设备
         if self.use_arm and self.arm is not None:
             await self.arm.disconnect()
+        await self.potentiostat.disconnect()
         await self.otflex.disconnect()
         print("[Workflow] All done.")
 
@@ -268,9 +273,11 @@ class WorkflowRunner:
 
     async def _run_sdl1(self, ntype: str, p: Dict[str, Any], locks: List[str]):
         async with self.resources.acquire_many(locks):
-            # 这里直接交给 OTFlex 的电化学测量/外设，或保留为 no-op（按你的现有对接）
-            # 若你已有独立脚本/适配器，请替换为对应调用
-            await self.otflex.echem_measure(p)
+            key = ntype.lower()
+            if "electrochemicalmeasurement" in key or "echem" in key or "potent" in key:
+                await self.potentiostat.echem_measure(p)
+            else:
+                await self.otflex.echem_measure(p)
 
 def main():
     ap = argparse.ArgumentParser()
