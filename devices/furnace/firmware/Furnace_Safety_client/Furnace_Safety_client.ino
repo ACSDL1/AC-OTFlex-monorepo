@@ -49,7 +49,7 @@ const uint32_t MAX_MOTION_LEASE_MS = 60000;  // 60s cap for manual motion comman
 #define ETH_CLK_MODE   ETH_CLOCK_GPIO17_OUT
 
 /************ Relay config ************/
-#define RELAY_ADDR      0x3D
+#define RELAY_ADDR      0x6D
 #define RELAY_OPEN_1    1
 #define RELAY_OPEN_2    3
 #define RELAY_CLOSE_1   2
@@ -80,6 +80,7 @@ unsigned long lastBeat = 0;
 unsigned long lastCtrlBeat = 0;
 bool ctrlSeen = false;
 unsigned long lastMqttHealthy = 0;
+unsigned long lastEthWaitLog = 0;
 
 /************ Actuator control ************/
 void stopActuator() {
@@ -335,6 +336,8 @@ void setup() {
     IPAddress(8,8,8,8)         // DNS2
   );
 
+  scanI2C();  // <-- add this before relay.begin()
+
   relay_ok = relay.begin();
   Serial.printf("[I2C] Relay 0x%02X: %s\n", RELAY_ADDR, relay_ok ? "OK" : "NOT FOUND");
 
@@ -353,6 +356,14 @@ void setup() {
 
 void loop() {
   uint32_t now = millis();
+
+  if (!eth_ready && now - lastEthWaitLog > 2000) {
+    lastEthWaitLog = now;
+    IPAddress ip = ETH.localIP();
+    Serial.printf("[ETH] Waiting for IP... link=%s ip=%u.%u.%u.%u\n",
+                  ETH.linkUp() ? "UP" : "DOWN",
+                  ip[0], ip[1], ip[2], ip[3]);
+  }
 
   if (eth_ready && !mqtt.connected()) {
     ensureMqtt();
@@ -406,4 +417,17 @@ void loop() {
   }
 
   delay(10);
+}
+
+void scanI2C() {
+  Serial.println("[I2C] Scanning...");
+  uint8_t found = 0;
+  for (uint8_t addr = 1; addr < 127; addr++) {
+    Wire.beginTransmission(addr);
+    if (Wire.endTransmission() == 0) {
+      Serial.printf("[I2C] Found device @ 0x%02X\n", addr);
+      found++;
+    }
+  }
+  if (!found) Serial.println("[I2C] No devices found");
 }

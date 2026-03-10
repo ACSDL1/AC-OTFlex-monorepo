@@ -69,6 +69,8 @@ mosquitto_passwd -c passwd pyctl-controller
 mosquitto_passwd    passwd pump1
 mosquitto_passwd    passwd ultra1
 mosquitto_passwd    passwd heat1
+mosquitto_passwd    passwd reactor1
+mosquitto_passwd    passwd furnace1
 ```
 
 Move `passwd` to the path referenced in `mosquitto.conf`.
