@@ -130,10 +130,19 @@ class OTFlex:
         out = {
             "from_labware": src.get("labware"),
             "from_well": src.get("well"),
+            "from_dX": self._norm_num(src.get("offsetX", 0.5)),
+            "from_dY": self._norm_num(src.get("offsetY", 1.0)),
+            "from_dZ": self._norm_num(src.get("offsetZ", 0.0)),
             "to_labware": dst.get("labware"),
             "to_well": dst.get("well"),
+            "to_dX": self._norm_num(dst.get("offsetX", -3.5)),
+            "to_dY": self._norm_num(dst.get("offsetY", -34.5)),
+            "to_dZ": self._norm_num(dst.get("offsetZ", 0.0)),
             "move_speed": self._norm_num(p.get("move_speed", 100)),
             "pipette": p.get("pipette"),
+            "approach_offset_z": self._norm_num(p.get("approach_offset_z", 0.0)),
+            "insert_pause_s": self._norm_num(p.get("insert_pause_s", 2.0)),
+            "return_dZ": self._norm_num(p.get("return_dZ", 12.0)),
         }
         # 便于排查首个位置偏移问题，打印解析后的关键位置信息
         print(
@@ -166,10 +175,19 @@ class OTFlex:
         out = {
             "from_labware": src.get("labware"),
             "from_well": src.get("well"),
+            "from_dX": self._norm_num(src.get("offsetX", 0.5)),
+            "from_dY": self._norm_num(src.get("offsetY", 1.0)),
+            "from_dZ": self._norm_num(src.get("offsetZ", 0.0)),
             "to_labware": dst.get("labware"),
             "to_well": dst.get("well"),
+            "to_dX": self._norm_num(dst.get("offsetX", -3.5)),
+            "to_dY": self._norm_num(dst.get("offsetY", -34.5)),
+            "to_dZ": self._norm_num(dst.get("offsetZ", 0.0)),
             "move_speed": self._norm_num(p.get("move_speed", 100)),
             "pipette": p.get("pipette"),
+            "approach_offset_z": self._norm_num(p.get("approach_offset_z", 0.0)),
+            "insert_pause_s": self._norm_num(p.get("insert_pause_s", 2.0)),
+            "return_dZ": self._norm_num(p.get("return_dZ", 12.0)),
         }
         # 便于排查首个位置偏移问题，打印解析后的关键位置信息
         print(
@@ -281,8 +299,12 @@ class OTFlex:
             "to_dZ": self._norm_num(dst.get("offsetZ", 0)),
             "pipette": p.get("pipette"),
             "pump_id": p.get("pump_id"),
+            "in_pump_id": p.get("in_pump_id"),
+            "out_pump_id": p.get("out_pump_id"),
             "time_ms": p.get("time_ms"),
             "repeats": p.get("repeats"),
+            "purge_ms": p.get("purge_ms"),
+            "return_dZ": self._norm_num(p.get("return_dZ", 12.0)),
             "home_after": p.get("home_after", False),
         }
         return out

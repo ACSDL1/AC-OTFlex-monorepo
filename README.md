@@ -62,6 +62,9 @@ python src/workflows/run_workflow.py --json data/workflows/simple_test_workflow.
 
 # Production execution
 python src/workflows/run_workflow.py --json data/workflows/completeflexelectrodep_workflow-FILLED.json
+
+# Start from a specific node ID and continue forward
+python -m src.workflows.run_workflow --json data/workflows/gavinMQTT_Flex_Workflow.json --start-node flush_col1_with_flush_tool
 ```
 
 ### Creating a Simple Workflow
@@ -116,6 +119,9 @@ python tests/test_workflows.py --test json-validation --workflow data/workflows/
 
 # Run workflow (dry-run)
 python src/workflows/run_workflow.py --json data/workflows/my_workflow.json --dry-run
+
+# Resume workflow from a node ID
+python -m src.workflows.run_workflow --json data/workflows/my_workflow.json --start-node some_node_id
 
 # Get help
 python tests/test_opentrons.py --help

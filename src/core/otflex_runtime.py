@@ -4,7 +4,7 @@
 """
 otflex_runtime.py
 
-Runtime wrapper for OT-Flex + Arduino peripherals.
+Runtime wrapper for OT-Flex + MQTT-controlled IoT peripherals.
 Implements the required entrypoints used by adapters/otflex_adapter.py:
   - otflex_connect(cfg)
   - otflex_disconnect()
@@ -19,8 +19,7 @@ Implements the required entrypoints used by adapters/otflex_adapter.py:
 
 This module intentionally does NOT import OTFLEX_WORKFLOW_Iliya.py to avoid
 executing its top-level code during import. Instead it talks to
-opentronsClient and to Arduino over serial using the command protocol
-reflected in OTFLEX_WORKFLOW_Iliya.py.
+opentronsClient and to IoT devices through the MQTT adapter layer.
 """
 
 from __future__ import annotations
@@ -65,72 +64,9 @@ except Exception:
         opentronsClient = None  # type: ignore
 
 try:
-    import serial  # type: ignore
+    from src.adapters.iot_mqtt import FurnaceMQTT, HeatMQTT, PumpMQTT, ReactorMQTT, UltraMQTT  # type: ignore
 except Exception:
-    serial = None  # type: ignore
-
-
-class _ArduinoClient:
-    def __init__(self, port: str, baudrate: int = 115200, timeout: float = 5.0):
-        self._port = port
-        self._baudrate = baudrate
-        self._timeout = timeout
-        self._ser = None
-
-    def connect(self):
-        if serial is None:
-            print("[OTFlex][WARN] pyserial not available; Arduino disabled")
-            return
-        self._ser = serial.Serial(self._port, self._baudrate, timeout=self._timeout)
-        time.sleep(2.0)
-
-    def disconnect(self):
-        if self._ser:
-            self._ser.close()
-            self._ser = None
-
-    def _cmd(self, line: str, expect_ok: bool = True, extra_timeout: float = 0.0):
-        if not self._ser:
-            print(f"[OTFlex][WARN] Arduino not connected; skip cmd: {line}")
-            return
-        self._ser.write((line + "\n").encode())
-        t_end = time.time() + max(self._timeout + extra_timeout, 0.1)
-        buf = b""
-        while time.time() < t_end:
-            if self._ser.in_waiting > 0:
-                b = self._ser.read()
-                buf += b
-                if buf.endswith(b"\r\n"):
-                    s = buf.decode().strip()
-                    if s == "0":
-                        return
-                    elif s == "1":
-                        raise RuntimeError(f"Arduino returned error for: {line}")
-                    buf = b""  # collect log lines, continue
-        if expect_ok:
-            print(f"[OTFlex][WARN] Arduino no-OK for: {line}")
-
-    # High-level helpers reflecting OTFLEX_WORKFLOW_Iliya Arduino API
-    def set_furnace(self, open_: bool):
-        self._cmd("set_furnace_open" if open_ else "set_furnace_close", extra_timeout=6.5)
-
-    def set_reactor(self, on: bool):
-        self._cmd("set_reactor_on" if on else "set_reactor_off", extra_timeout=5.8)
-
-    def set_pump(self, pump: int, on: bool):
-        self._cmd(f"set_pump_on {pump}" if on else f"set_pump_off {pump}")
-
-    def set_pump_time(self, pump: int, ms: int):
-        self._cmd(f"set_pump_on_time {pump} {ms}", extra_timeout=ms/1000.0 + 3.0)
-
-    def set_ultrasonic(self, base: int, on: bool):
-        self._cmd(f"set_ultrasonic_on {base}" if on else f"set_ultrasonic_off {base}")
-
-    def set_ultrasonic_time(self, base: int, ms: int):
-        self._cmd(f"set_ultrasonic_on_time {base} {ms}", extra_timeout=ms/1000.0 + 3.0)
-
-    def switch_electrode(self, refer: bool):
-        self._cmd("switch_2Electrode" if refer else "switch_3Electrode")
+    from adapters.iot_mqtt import FurnaceMQTT, HeatMQTT, PumpMQTT, ReactorMQTT, UltraMQTT  # type: ignore
 
 
 class _OTFlexRuntime:
@@ -138,7 +74,11 @@ class _OTFlexRuntime:
         self.oc = None
         self.deck = {}
         self.pipettes = {}
-        self.arduino: Optional[_ArduinoClient] = None
+        self.mqtt_pumps: Optional[PumpMQTT] = None
+        self.mqtt_ultra: Optional[UltraMQTT] = None
+        self.mqtt_heat: Optional[HeatMQTT] = None
+        self.mqtt_reactor: Optional[ReactorMQTT] = None
+        self.mqtt_furnace: Optional[FurnaceMQTT] = None
         self.lw_ids: Dict[str, str] = {}
         self.root_dir = Path.cwd()
         self.tip_tracker: Optional[TipTracker] = None
@@ -163,17 +103,34 @@ class _OTFlexRuntime:
             except Exception:
                 pass
 
-        # Connect Arduino if provided
-        ard = (cfg or {}).get("arduino") or {}
-        if ard:
+        # Connect MQTT IoT adapters if provided
+        mqtt_cfg = (cfg or {}).get("mqtt") or {}
+        topics = mqtt_cfg.get("topics", {}) or {}
+        if mqtt_cfg and topics:
+            common = dict(
+                broker=mqtt_cfg.get("broker", "localhost"),
+                port=int(mqtt_cfg.get("port", 1883)),
+                username=mqtt_cfg.get("username"),
+                password=mqtt_cfg.get("password"),
+            )
             try:
-                self.arduino = _ArduinoClient(ard.get("port", "/dev/ttyACM0"), ard.get("baudrate", 115200))
-                self.arduino.connect()
-                print(f"[OTFlex][REAL] Arduino connected on {ard.get('port', '/dev/ttyACM0')}")
+                if topics.get("pumps"):
+                    self.mqtt_pumps = PumpMQTT(**common, base_topic=topics["pumps"], client_id="otflex-pumps")
+                    self.mqtt_pumps.ensure_connected()
+                if topics.get("ultra"):
+                    self.mqtt_ultra = UltraMQTT(**common, base_topic=topics["ultra"], client_id="otflex-ultra")
+                    self.mqtt_ultra.ensure_connected()
+                if topics.get("heat"):
+                    self.mqtt_heat = HeatMQTT(**common, base_topic=topics["heat"], client_id="otflex-heat")
+                    self.mqtt_heat.ensure_connected()
+                if topics.get("reactor"):
+                    self.mqtt_reactor = ReactorMQTT(**common, base_topic=topics["reactor"], client_id="otflex-reactor")
+                    self.mqtt_reactor.ensure_connected()
+                if topics.get("furnace"):
+                    self.mqtt_furnace = FurnaceMQTT(**common, base_topic=topics["furnace"], client_id="otflex-furnace")
+                    self.mqtt_furnace.ensure_connected()
             except Exception as e:
-                print(f"[OTFlex][WARN] Arduino connection failed: {e}")
-                print("[OTFlex][WARN] Running without Arduino hardware")
-                self.arduino = None
+                print(f"[OTFlex][WARN] MQTT IoT adapter connection failed: {e}")
 
         # Connect Opentrons (allow overriding opentrons.py via cfg['opentrons_path'])
         ip = (cfg or {}).get("controller_ip") or os.environ.get("OT_IP") or "127.0.0.1"
@@ -290,8 +247,12 @@ class _OTFlexRuntime:
                 self.oc.homeRobot()
             except Exception:
                 pass
-        if self.arduino:
-            self.arduino.disconnect()
+        for dev in (self.mqtt_pumps, self.mqtt_ultra, self.mqtt_heat, self.mqtt_reactor, self.mqtt_furnace):
+            if dev is not None:
+                try:
+                    dev.disconnect()
+                except Exception:
+                    pass
         self.oc = None
 
     # ---------- high-level OT actions ----------
@@ -403,13 +364,27 @@ class _OTFlexRuntime:
         from_lw_id = self.lw_ids.get(from_lw, from_lw)
         to_lw_id = self.lw_ids.get(to_lw, to_lw)
 
+        # Geometry controls (all configurable from workflow JSON)
+        pickup_offset_x = float(p.get('from_dX', p.get('from', {}).get('offsetX', 0.5)))
+        pickup_offset_y = float(p.get('from_dY', p.get('from', {}).get('offsetY', 1.0)))
+        pickup_offset_z = float(p.get('from_dZ', p.get('from', {}).get('offsetZ', 0.0)))
+
+        target_offset_x = float(p.get('to_dX', p.get('to', {}).get('offsetX', -3.5)))
+        target_offset_y = float(p.get('to_dY', p.get('to', {}).get('offsetY', -34.5)))
+        target_offset_z = float(p.get('to_dZ', p.get('to', {}).get('offsetZ', 0.0)))
+
+        approach_offset_z = float(p.get('approach_offset_z', 0.0))
+        insert_pause_s = float(p.get('insert_pause_s', 2.0))
+        return_dz = float(p.get('return_dZ', 12.0))
+
         print(f"[OTFlex] Picking up electrode tip from {from_lw_id}.{from_well}")
         self.oc.pickUpTip(
             strLabwareName=from_lw_id,
             strPipetteName=pip,
             strWellName=from_well,
-            fltOffsetX=0.5,
-            fltOffsetY=1
+            fltOffsetX=pickup_offset_x,
+            fltOffsetY=pickup_offset_y,
+            fltOffsetZ=pickup_offset_z
         )
 
         print(f"[OTFlex] Moving electrode to {to_lw_id}.{to_well} (approach)")
@@ -418,9 +393,9 @@ class _OTFlexRuntime:
             strWellName=to_well,
             strPipetteName=pip,
             strOffsetStart='top',
-            fltOffsetX=-3.5,
-            fltOffsetY=-34.5,
-            fltOffsetZ=0,
+            fltOffsetX=target_offset_x,
+            fltOffsetY=target_offset_y,
+            fltOffsetZ=approach_offset_z,
             intSpeed=50
         )
 
@@ -430,14 +405,14 @@ class _OTFlexRuntime:
             strWellName=to_well,
             strPipetteName=pip,
             strOffsetStart='bottom',
-            fltOffsetX=-3.5,
-            fltOffsetY=-34.5,
-            fltOffsetZ=0,
+            fltOffsetX=target_offset_x,
+            fltOffsetY=target_offset_y,
+            fltOffsetZ=target_offset_z,
             intSpeed=50
         )
 
         import time
-        time.sleep(2)
+        time.sleep(insert_pause_s)
         
         # Retract electrode (back to high position)
         print(f"[OTFlex] Retracting electrode")
@@ -446,9 +421,9 @@ class _OTFlexRuntime:
             strWellName=to_well,
             strPipetteName=pip,
             strOffsetStart='top',
-            fltOffsetX=-3.5,
-            fltOffsetY=-34.5,
-            fltOffsetZ=0,
+            fltOffsetX=target_offset_x,
+            fltOffsetY=target_offset_y,
+            fltOffsetZ=approach_offset_z,
             intSpeed=50
         )
         
@@ -459,8 +434,8 @@ class _OTFlexRuntime:
             strWellName=from_well,
             strPipetteName=pip,
             strOffsetStart='top',
-            fltOffsetX=0.5,
-            fltOffsetY=1,
+            fltOffsetX=pickup_offset_x,
+            fltOffsetY=pickup_offset_y,
             fltOffsetZ=10,
             intSpeed=100
         )
@@ -473,13 +448,15 @@ class _OTFlexRuntime:
             strLabwareName=from_lw_id,
             strWellName=from_well,
             strOffsetStart="bottom",
-            fltOffsetZ=12
+            fltOffsetX=pickup_offset_x,
+            fltOffsetY=pickup_offset_y,
+            fltOffsetZ=return_dz
         )
         
         print(f"[OTFlex] Electrode tool transfer completed")
 
     def flushWell(self, p: Dict[str, Any]):
-        """Combined electrode positioning and Arduino pump flushing"""
+        """Combined electrode positioning and MQTT pump flushing"""
         if not self.oc:
             print("[OTFlex][DRY] flush well:", p)
             return
@@ -519,9 +496,13 @@ class _OTFlexRuntime:
             target_offset_y = float(to_obj.get('offsetY', -34.5))
             target_offset_z = float(to_obj.get('offsetZ', 0.0))
 
-        # Arduino pump parameters
-        time_ms = float(p.get('time_ms', 10.0))  # milseconds
+        # Pump-cycle parameters (defaults keep previous behavior if not provided)
+        time_ms = float(p.get('time_ms', 10.0))
         repeats = int(p.get('repeats', 1))
+        in_pump_id = int(p.get('in_pump_id', 2))
+        out_pump_id = int(p.get('out_pump_id', 0))
+        purge_ms = float(p.get('purge_ms', 1000))
+        return_dz = float(p.get('return_dZ', 12.0))
 
         # Validate required parameters
         if not from_lw or not to_lw:
@@ -534,6 +515,7 @@ class _OTFlexRuntime:
         print(f"[OTFlex][DEBUG] From: {from_lw}.{from_well}")
         print(f"[OTFlex][DEBUG] To: {to_lw}.{to_wells}")
         print(f"[OTFlex][DEBUG] Repeats: {repeats} times, duration: {time_ms}ms")
+        print(f"[OTFlex][DEBUG] Pump cycle: in={in_pump_id} for {time_ms}ms, out={out_pump_id} for {time_ms}ms")
 
         from_lw_id = self.lw_ids.get(from_lw, from_lw)
         to_lw_id = self.lw_ids.get(to_lw, to_lw)
@@ -551,6 +533,20 @@ class _OTFlexRuntime:
 
         # Step 2-3: Loop through all target wells
         for i, current_well in enumerate(to_wells):
+            if i > 0:
+                prev_well = to_wells[i - 1]
+                print(f"[OTFlex] Lifting from {prev_well} before moving to {current_well}")
+                self.oc.moveToWell(
+                    strLabwareName=to_lw_id,
+                    strWellName=prev_well,
+                    strPipetteName=pip,
+                    strOffsetStart='top',
+                    fltOffsetX=target_offset_x,
+                    fltOffsetY=target_offset_y,
+                    fltOffsetZ=target_offset_z,
+                    intSpeed=50
+                )
+
             print(f"[OTFlex] Moving electrode to flush position {to_lw_id}.{current_well} ({i+1}/{len(to_wells)})")
             self.oc.moveToWell(
                 strLabwareName=to_lw_id,
@@ -563,14 +559,14 @@ class _OTFlexRuntime:
                 intSpeed=50
             )
 
-            # Run Arduino pump flushing
+            # Run MQTT pump flushing
             print(f"[OTFlex] Starting operation at {current_well} for {time_ms}ms")
             for _ in range(repeats):
-                self._run_pump_flush(2, time_ms)
-                self._run_pump_flush(0, 1000)
-                self._run_pump_flush(2, time_ms)
-                self._run_pump_flush(0, 1000)
-                self._run_pump_flush(2, time_ms)
+                self._run_pump_flush(in_pump_id, time_ms)
+                self._run_pump_flush(out_pump_id, time_ms)
+                if purge_ms > 0:
+                    self._run_pump_flush(out_pump_id, purge_ms)
+            print(f"[OTFlex] Completed all pump cycles at {current_well}")
 
         # Step 4: Retract electrode from last well
         last_well = to_wells[-1]
@@ -605,7 +601,9 @@ class _OTFlexRuntime:
             strLabwareName=from_lw_id,
             strWellName=from_well,
             strOffsetStart="bottom",
-            fltOffsetZ=12
+            fltOffsetX=pickup_offset_x,
+            fltOffsetY=pickup_offset_y,
+            fltOffsetZ=return_dz
         )
 
         if bool(p.get('home_after', False)):
@@ -618,9 +616,9 @@ class _OTFlexRuntime:
 
 
     def _run_pump_flush(self, pump_id, duration):
-        """Run Arduino pump flushing operation using existing pump function"""
+        """Run pump flushing operation using MQTT-backed otflex_pump helper."""
         try:
-            print(f"[OTFlex] Activating Arduino pumps: {pump_id}")
+            print(f"[OTFlex] Activating MQTT pump channel: {pump_id}")
 
             # Create pump parameters for the existing otflex_pump function
             pump_params = {
@@ -633,14 +631,21 @@ class _OTFlexRuntime:
             # Use the existing otflex_pump function
             otflex_pump(pump_params)
 
+            # MQTT timed ON publishes immediately; explicitly block so robot
+            # stays in the current well until this pump step is complete.
+            wait_s = max(0.0, float(duration) / 1000.0)
+            if wait_s > 0:
+                print(f"[OTFlex] Waiting {wait_s:.3f}s for pump {pump_id} to finish")
+                time.sleep(wait_s)
+
             print(f"[OTFlex] Pump operation completed")
 
         except Exception as e:
             print(f"[OTFlex] ERROR in pump flush operation: {e}")
             # Continue with simulation
-            import time
-            time.sleep(duration)
-            print(f"[OTFlex] Fallback: Simulated {pump_id} for {duration}ms")
+            wait_s = max(0.0, float(duration) / 1000.0)
+            time.sleep(wait_s)
+            print(f"[OTFlex] Fallback: Simulated {pump_id} for {wait_s:.3f}s")
 
     def potentExperiment(self, p: Dict[str, Any]):
         """Combined electrode positioning and potentiostat experiment"""
@@ -947,56 +952,65 @@ class _OTFlexRuntime:
         print(f"[OTFlex][WARN] Unknown gripper action: {action}")
         return
 
-    # ---------- Arduino-backed helpers ----------
+    # ---------- MQTT-backed IoT helpers ----------
     def furnace(self, p: Dict[str, Any]):
-        if not self.arduino:
-            print("[OTFlex][DRY] furnace:", p)
+        if not self.mqtt_furnace:
+            print("[OTFlex][WARN] MQTT furnace not configured; skipping:", p)
             return
         open_ = bool(p.get('open', False))
-        self.arduino.set_furnace(open_)
-        time.sleep(10)
+        dur = p.get('duration_ms')
+        if open_:
+            self.mqtt_furnace.open(dur)
+        else:
+            self.mqtt_furnace.close(dur)
 
     def pump(self, p: Dict[str, Any]):
-        if not self.arduino:
-            print("[OTFlex][DRY] pump:", p)
+        if not self.mqtt_pumps:
+            print("[OTFlex][WARN] MQTT pumps not configured; skipping:", p)
             return
         pump_id = int(p.get('pump_id', 0))
         if 'time_ms' in p:
-            self.arduino.set_pump_time(pump_id, int(p['time_ms']))
+            self.mqtt_pumps.on(pump_id, int(p['time_ms']))
         else:
             on = bool(p.get('on', True))
-            self.arduino.set_pump(pump_id, on)
+            if on:
+                self.mqtt_pumps.on(pump_id)
+            else:
+                self.mqtt_pumps.off(pump_id)
 
     def electrode(self, p: Dict[str, Any]):
-        if not self.arduino:
-            print("[OTFlex][DRY] electrode:", p)
-            return
-        refer = bool(p.get('refer', True))
-        self.arduino.switch_electrode(refer)
+        print("[OTFlex][WARN] otflex_electrode is not supported in MQTT-only mode; skipping:", p)
 
     def reactor(self, p: Dict[str, Any]):
-        if not self.arduino:
-            print("[OTFlex][DRY] reactor:", p)
+        if not self.mqtt_reactor:
+            print("[OTFlex][WARN] MQTT reactor not configured; skipping:", p)
             return
         state = (p.get('state') or '').lower()
         if state in ('open','opened','unlock','on'):
-            on = True
+            self.mqtt_reactor.forward(p.get('duration_ms'))
         elif state in ('close','closed','lock','off'):
-            on = False
+            self.mqtt_reactor.reverse(p.get('duration_ms'))
         else:
             on = bool(p.get('on', True))
-        self.arduino.set_reactor(on)
+            if on:
+                self.mqtt_reactor.forward(p.get('duration_ms'))
+            else:
+                self.mqtt_reactor.reverse(p.get('duration_ms'))
 
     def wash(self, p: Dict[str, Any]):
-        if not self.arduino:
-            print("[OTFlex][DRY] wash:", p)
+        if not self.mqtt_ultra:
+            print("[OTFlex][WARN] MQTT ultrasonic not configured; skipping:", p)
             return
         # Example: {"ultrasound": {"relay": 7, "duration_s": 20}}
         us = p.get('ultrasound') or {}
+        channel = int(us.get('channel', us.get('relay', 1)))
         if 'duration_s' in us:
-            self.arduino.set_ultrasonic_time(int(us.get('relay', 7)), int(us['duration_s'] * 1000))
+            self.mqtt_ultra.on(channel, int(float(us['duration_s']) * 1000))
         elif 'on' in us:
-            self.arduino.set_ultrasonic(int(us.get('relay', 7)), bool(us['on']))
+            if bool(us['on']):
+                self.mqtt_ultra.on(channel)
+            else:
+                self.mqtt_ultra.off(channel)
 
     def echem_measure(self, p: Dict[str, Any]):
         print("[OTFlex][INFO] echem_measure placeholder:", p)

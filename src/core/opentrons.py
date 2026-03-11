@@ -886,10 +886,25 @@ class opentronsClient:
             # convert response to dictionary
             dicResponse = json.loads(response.text)
             if dicResponse['data']['status'] == "failed":
-                # log the error
-                LOGGER.error(f"Failed to drop tip.\nResponse error code: {dicResponse.error.errorCode}\n Error type: {dicResponse.error.errorType}\n Error message: {dicResponse.error.detail}")
-                # raise exception
-                raise Exception(f"Failed to drop tip.\nResponse error code: {dicResponse.error.errorCode}\n Error type: {dicResponse.error.errorType}\n Error message: {dicResponse.error.detail}")
+                err = dicResponse.get("data", {}).get("error") or dicResponse.get("error") or {}
+                if isinstance(err, dict):
+                    err_code = err.get("errorCode")
+                    err_type = err.get("errorType")
+                    err_msg = err.get("detail") or err.get("message")
+                else:
+                    err_code = None
+                    err_type = type(err).__name__ if err is not None else None
+                    err_msg = str(err)
+
+                msg = (
+                    "Failed to drop tip.\n"
+                    f"Response error code: {err_code}\n"
+                    f"Error type: {err_type}\n"
+                    f"Error message: {err_msg}\n"
+                    f"Raw response: {dicResponse}"
+                )
+                LOGGER.error(msg)
+                raise Exception(msg)
             else:
                 # LOG - info
                 LOGGER.info(f"Tip dropped into labware: {strLabwareName}, well: {strWellName}")

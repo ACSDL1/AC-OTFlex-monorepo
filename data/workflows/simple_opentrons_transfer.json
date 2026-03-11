@@ -1,7 +1,7 @@
 {
   "name": "Simple Opentrons Transfer",
-  "description": "Opentrons-only workflow: transfer liquid from one well to another",
-  "version": "1.0.0",
+  "description": "Transfer liquid from one well to the reactor, then lift the reactor via MQTT",
+  "version": "1.1.0",
   "author": "AC-OTFlex",
   "created": "2026-03-04",
   "workflow": {
@@ -15,7 +15,7 @@
       {
         "id": "transfer_1",
         "type": "otflexTransfer",
-        "label": "Transfer Liquid",
+        "label": "Transfer Liquid to Reactor",
         "params": {
           "from": {
             "labware": "source_plate",
@@ -38,6 +38,18 @@
         }
       },
       {
+        "id": "reactor_lift",
+        "type": "mqttReactor",
+        "label": "Reactor Lift",
+        "params": {
+          "direction": "forward",
+          "duration_ms": 3000,
+          "resourceLocks": [
+            "reactor:01"
+          ]
+        }
+      },
+      {
         "id": "end",
         "type": "output",
         "label": "End",
@@ -54,6 +66,12 @@
       {
         "id": "e2",
         "source": "transfer_1",
+        "target": "reactor_lift",
+        "type": "default"
+      },
+      {
+        "id": "e3",
+        "source": "reactor_lift",
         "target": "end",
         "type": "default"
       }
@@ -63,10 +81,6 @@
     "otflex": {
       "module": "otflex_runtime.py",
       "controller_ip": "169.254.179.32",
-      "arduino": {
-        "port": "COM4",
-        "baudrate": 115200
-      },
       "deck": {
         "slots": {
           "B1": {
@@ -95,6 +109,15 @@
             "model": "p1000_single_flex"
           }
         }
+      }
+    },
+    "mqtt": {
+      "broker": "localhost",
+      "port": 1883,
+      "username": "pyctl-controller",
+      "password": "controller",
+      "topics": {
+        "reactor": "reactor/01"
       }
     }
   }

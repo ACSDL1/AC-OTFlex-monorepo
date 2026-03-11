@@ -1,32 +1,57 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 run_workflow.py
-- 读取 Canvas 导出的 JSON（含你补齐的 FILLED 版本字段）
-- 解析 nodes/edges + executionMetadata
-- 并行/串行调度执行各节点
-- 通过 adapters/otflex_adapter.py 与 adapters/arm_adapter.py 调用你的设备脚本
-使用:
-    python run_workflow.py --json /path/to/completeflexelectrodep_workflow-FILLED.json
+---------------
+Reads a Canvas-exported JSON workflow and executes it against the SDL1 hardware stack.
+
+Execution model
+  - Nodes are dispatched by their "type" prefix (e.g. otflex*, myxArm*, mqtt*, sdl1*)
+  - Edges can carry a "mode" field of "sequential" (default) or "parallel"
+  - Parallel sibling groups are launched concurrently with asyncio.gather()
+  - Resource locks prevent conflicting nodes from running at the same time
+
+Hardware adapters
+  - OTFlex       (otflex_adapter.py)     – Opentrons liquid handler
+  - MyxArm       (arm_adapter.py)        – robotic arm
+  - MQTT bus     (iot_mqtt.py)           – pumps, ultrasonic, heater, reactor, furnace
+  - Potentiostat (potentiostat_adapter.py) – electrochemical measurements
+
+CLI usage
+  python -m src.workflows.run_workflow --json data/workflows/my_workflow.json
+  python -m src.workflows.run_workflow --json data/workflows/my_workflow.json --no-arm
+    python -m src.workflows.run_workflow --json data/workflows/my_workflow.json --start-node my_node_id
 """
 
 import argparse
 import asyncio
 import json
-import os
-from pathlib import Path
-from typing import Dict, Any, List, Tuple, Set, Optional
+import time
 from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set
 
-# === 设备适配层 ===
-from ..adapters.otflex_adapter import OTFlex
 from ..adapters.arm_adapter import MyxArm
+from ..adapters.iot_mqtt import (
+    ControllerBeacon,
+    FurnaceMQTT,
+    HeatMQTT,
+    PumpMQTT,
+    ReactorMQTT,
+    UltraMQTT,
+    _best_effort_all_off,
+)
+from ..adapters.otflex_adapter import OTFlex
 from ..adapters.potentiostat_adapter import PotentiostatAdapter
 
-# ================ 工具 ================
+
+# ---------------------------------------------------------------------------
+# Resource locking — prevents two nodes from using the same hardware slot
+# ---------------------------------------------------------------------------
+
 class ResourceLocks:
-    """最小资源锁实现：并行时避免占同一工位/资源"""
-    def __init__(self):
+    """Minimal async lock pool. Each named resource gets its own asyncio.Lock."""
+
+    def __init__(self) -> None:
         self._locks: Dict[str, asyncio.Lock] = {}
 
     def get(self, name: str) -> asyncio.Lock:
@@ -36,8 +61,8 @@ class ResourceLocks:
 
     @asynccontextmanager
     async def acquire_many(self, names: List[str]):
-        locks = [self.get(n) for n in sorted(set([n for n in names if n]))]
-        # 依次拿锁，防死锁
+        """Acquire multiple locks in a consistent (sorted) order to avoid deadlocks."""
+        locks = [self.get(n) for n in sorted(set(n for n in names if n))]
         for lk in locks:
             await lk.acquire()
         try:
@@ -46,252 +71,570 @@ class ResourceLocks:
             for lk in reversed(locks):
                 lk.release()
 
+
+# ---------------------------------------------------------------------------
+# Retry helper
+# ---------------------------------------------------------------------------
+
 class RetryError(Exception):
     pass
 
-async def with_retry(coro_func, *, retries=0, timeout=None, retry_delay=0.5, desc=""):
-    last_exc = None
+
+async def with_retry(coro_func, *, retries: int = 0, timeout: Optional[float] = None,
+                     retry_delay: float = 0.5, desc: str = ""):
+    """
+    Run coro_func() up to (retries + 1) times.
+    Optional per-attempt timeout in seconds.
+    """
     for attempt in range(retries + 1):
         try:
             if timeout:
                 return await asyncio.wait_for(coro_func(), timeout=timeout)
-            else:
-                return await coro_func()
-        except Exception as e:
-            last_exc = e
+            return await coro_func()
+        except Exception as exc:
             if attempt < retries:
                 await asyncio.sleep(retry_delay)
             else:
-                raise RetryError(f"[FAILED after {retries+1} attempt(s)] {desc}: {e}") from e
+                raise RetryError(
+                    f"[FAILED after {retries + 1} attempt(s)] {desc}: {exc}"
+                ) from exc
 
-# ================ 调度器 ================
+
+# ---------------------------------------------------------------------------
+# MQTT device bundle — wraps all IoT nodes from a single "mqtt" config block
+# ---------------------------------------------------------------------------
+
+class MQTTDevices:
+    """
+    Manages all MQTT-based devices as a group.
+
+    Expected JSON block in workflow "devices.mqtt":
+    {
+        "broker":   "localhost",
+        "port":     1883,
+        "username": "pyctl-controller",
+        "password": "controller",
+        "topics": {
+            "pumps":   "pumps/01",
+            "ultra":   "ultra/01",
+            "heat":    "heat/01",
+            "reactor": "reactor/01",
+            "furnace": "furnace/01"
+        }
+    }
+
+    Any "topics" entry can be omitted to disable that device.
+    """
+
+    def __init__(self, cfg: Dict[str, Any]) -> None:
+        broker   = cfg.get("broker", "localhost")
+        port     = int(cfg.get("port", 1883))
+        username = cfg.get("username")
+        password = cfg.get("password")
+        topics   = cfg.get("topics", {})
+
+        common = dict(broker=broker, port=port, username=username, password=password)
+
+        self.pumps:   Optional[PumpMQTT]    = None
+        self.ultra:   Optional[UltraMQTT]   = None
+        self.heat:    Optional[HeatMQTT]    = None
+        self.reactor: Optional[ReactorMQTT] = None
+        self.furnace: Optional[FurnaceMQTT] = None
+        self.beacon:  Optional[ControllerBeacon] = None
+
+        if topics.get("pumps"):
+            self.pumps   = PumpMQTT(**common,    base_topic=topics["pumps"],   client_id="wf-pumps")
+        if topics.get("ultra"):
+            self.ultra   = UltraMQTT(**common,   base_topic=topics["ultra"],   client_id="wf-ultra")
+        if topics.get("heat"):
+            self.heat    = HeatMQTT(**common,    base_topic=topics["heat"],    client_id="wf-heat")
+        if topics.get("reactor"):
+            self.reactor = ReactorMQTT(**common, base_topic=topics["reactor"], client_id="wf-reactor")
+        if topics.get("furnace"):
+            self.furnace = FurnaceMQTT(**common, base_topic=topics["furnace"], client_id="wf-furnace")
+
+        # Controller beacon publishes ONLINE/OFFLINE and a heartbeat for ESP watchdogs
+        beacon_topic    = cfg.get("status_topic",    "pyctl/status")
+        heartbeat_topic = cfg.get("heartbeat_topic", "pyctl/heartbeat")
+        self.beacon = ControllerBeacon(
+            broker=broker, port=port, username=username, password=password,
+            client_id="wf-controller",
+            status_topic=beacon_topic,
+            heartbeat_topic=heartbeat_topic,
+        )
+
+    def connect(self) -> None:
+        """Start the controller beacon and connect any configured devices."""
+        self.beacon.start()
+        for dev in (self.pumps, self.ultra, self.heat, self.reactor, self.furnace):
+            if dev is not None:
+                dev.ensure_connected()
+        time.sleep(0.5)  # let connections settle
+        print("[MQTT] All devices connected.")
+
+    def disconnect(self) -> None:
+        """Best-effort shutdown: turn everything off, then disconnect."""
+        _best_effort_all_off(
+            pumps=self.pumps,
+            ultra=self.ultra,
+            heat=self.heat,
+            reactor=self.reactor,
+            furnace=self.furnace,
+        )
+        for dev in (self.pumps, self.ultra, self.heat, self.reactor, self.furnace):
+            if dev is not None:
+                try:
+                    dev.disconnect()
+                except Exception:
+                    pass
+        if self.beacon:
+            self.beacon.stop()
+        print("[MQTT] All devices disconnected.")
+
+
+# ---------------------------------------------------------------------------
+# Workflow runner
+# ---------------------------------------------------------------------------
+
 class WorkflowRunner:
-    def __init__(self, wf: Dict[str, Any], root_dir: Path, use_arm: bool = True):
-        self.wf = wf
-        self.root_dir = root_dir
-        self.nodes_by_id = {n["id"]: n for n in wf["workflow"]["nodes"]}
-        self.edges = wf["workflow"]["edges"]
-        self.metadata = wf["workflow"].get("executionMetadata", {})
-        self.resources = ResourceLocks()
-        self.use_arm = use_arm
+    """
+    Loads a workflow JSON and runs it.
 
-        # 设备实例（根据 JSON metadata.devices 初始化）
-        devices_meta = wf.get("devices", {})
-        # 支持从外部文件引用 otflex 配置（便于多工作流复用）
-        otflex_cfg = devices_meta.get("otflex", {})
-        otflex_ref = devices_meta.get("otflex_file")
+    Node routing:
+      type starts with "otflex"   → OTFlex liquid handler
+      type starts with "myxArm"   → robotic arm
+      type starts with "mqtt"     → MQTT IoT devices (pump / ultra / heat / reactor / furnace)
+      type starts with "sdl1"     → potentiostat / electrochemical measurement
+      type == "input" / "output"  → no-op (graph boundaries)
+    """
+
+    def __init__(
+        self,
+        wf: Dict[str, Any],
+        root_dir: Path,
+        use_arm: bool = True,
+        start_node: Optional[str] = None,
+    ) -> None:
+        self.wf          = wf
+        self.root_dir    = root_dir
+        self.nodes_by_id = {n["id"]: n for n in wf["workflow"]["nodes"]}
+        self.edges       = wf["workflow"]["edges"]
+        self.resources   = ResourceLocks()
+        self.start_node  = start_node
+
+        if self.start_node is not None and self.start_node not in self.nodes_by_id:
+            raise ValueError(f"Unknown --start-node '{self.start_node}'")
+
+        self.active_node_ids = self._collect_downstream_nodes(self.start_node)
+
+        devices = wf.get("devices", {})
+
+        # --- MQTT IoT devices ---
+        mqtt_cfg = devices.get("mqtt") or {}
+
+        # --- OTFlex ---
+        otflex_cfg = dict(devices.get("otflex", {}) or {})
+        if mqtt_cfg and "mqtt" not in otflex_cfg:
+            otflex_cfg["mqtt"] = mqtt_cfg
+        # Allow a separate file reference so one config can be reused across workflows
+        otflex_ref = devices.get("otflex_file")
         if otflex_ref:
             try:
                 ref_path = (root_dir / otflex_ref).resolve()
-                import json as _json
-                otflex_cfg = _json.loads(ref_path.read_text(encoding="utf-8"))
-                print(f"[Workflow] Loaded otflex config from {otflex_ref}")
-            except Exception as e:
-                print(f"[Workflow][WARN] failed to load otflex_file {otflex_ref}: {e}")
+                otflex_cfg = json.loads(ref_path.read_text(encoding="utf-8"))
+                print(f"[Workflow] OTFlex config loaded from {otflex_ref}")
+            except Exception as exc:
+                print(f"[Workflow][WARN] Could not load otflex_file '{otflex_ref}': {exc}")
         self.otflex = OTFlex(otflex_cfg, root_dir=root_dir)
-        potentiostat_cfg = devices_meta.get("potentiostat", {}) or {}
-        self.potentiostat = PotentiostatAdapter(potentiostat_cfg, root_dir=root_dir)
 
-        arm_cfg = devices_meta.get("arm", {}) or {}
-        arm_enabled_in_cfg = arm_cfg.get("enabled", True)
-        self.use_arm = bool(self.use_arm and arm_enabled_in_cfg)
-        self.arm: Optional[MyxArm] = None
-        if self.use_arm:
-            self.arm = MyxArm(arm_cfg, root_dir=root_dir)
-        else:
-            print("[Workflow] Arm disabled (CLI or config).")
+        # --- Potentiostat ---
+        self.potentiostat = PotentiostatAdapter(
+            devices.get("potentiostat") or {}, root_dir=root_dir
+        )
 
-    # 拓扑 + 并行执行
+        # --- MQTT IoT devices ---
+        self.mqtt = MQTTDevices(mqtt_cfg) if mqtt_cfg else None
+
+        # --- Robotic arm ---
+        arm_cfg = devices.get("arm") or {}
+        self.use_arm = use_arm and arm_cfg.get("enabled", True)
+        self.arm: Optional[MyxArm] = MyxArm(arm_cfg, root_dir=root_dir) if self.use_arm else None
+        if not self.use_arm:
+            print("[Workflow] Arm disabled.")
+
+        if self.start_node is not None:
+            print(
+                f"[Workflow] Starting from node '{self.start_node}' "
+                f"(executing {len(self.active_node_ids)} downstream node(s))."
+            )
+
+    def _collect_downstream_nodes(self, start_node: Optional[str]) -> Set[str]:
+        """Return all nodes reachable from start_node (inclusive)."""
+        if start_node is None:
+            return set(self.nodes_by_id.keys())
+
+        children_all = {nid: [] for nid in self.nodes_by_id}
+        for edge in self.edges:
+            src, dst = edge["source"], edge["target"]
+            if src in self.nodes_by_id and dst in self.nodes_by_id:
+                children_all[src].append(dst)
+
+        seen: Set[str] = set()
+        stack = [start_node]
+        while stack:
+            curr = stack.pop()
+            if curr in seen:
+                continue
+            seen.add(curr)
+            stack.extend(children_all.get(curr, []))
+        return seen
+
+    # -----------------------------------------------------------------------
+    # Graph construction
+    # -----------------------------------------------------------------------
+
     def _build_graph(self):
-        parents = {nid: set() for nid in self.nodes_by_id}
-        children = {nid: [] for nid in self.nodes_by_id}
-        edge_props = {}  # (src,dst) -> dict
+        """Build parent/child adjacency maps and a per-edge property dict."""
+        node_ids   = self.active_node_ids
+        parents    = {nid: set()  for nid in node_ids}
+        children   = {nid: []     for nid in node_ids}
+        edge_props = {}
 
-        for e in self.edges:
-            s = e["source"]; t = e["target"]
-            children[s].append(t)
-            parents[t].add(s)
-            edge_props[(s, t)] = e
+        for edge in self.edges:
+            src, dst = edge["source"], edge["target"]
+            if src not in self.nodes_by_id or dst not in self.nodes_by_id:
+                missing = []
+                if src not in self.nodes_by_id:
+                    missing.append(f"source='{src}'")
+                if dst not in self.nodes_by_id:
+                    missing.append(f"target='{dst}'")
+                edge_id = edge.get("id", "<no-id>")
+                raise ValueError(
+                    f"Invalid workflow edge {edge_id}: unresolved node reference(s): {', '.join(missing)}"
+                )
+            if src not in node_ids or dst not in node_ids:
+                continue
+            children[src].append(dst)
+            parents[dst].add(src)
+            edge_props[(src, dst)] = edge
+
         return parents, children, edge_props
 
-    def _roots(self, parents):
-        return [nid for nid, p in parents.items() if len(p) == 0]
+    # -----------------------------------------------------------------------
+    # Main execution loop
+    # -----------------------------------------------------------------------
 
-    async def run(self):
-        # 连接设备（如需要）
+    async def run(self) -> None:
+        # Connect all devices
         await self.otflex.connect()
         await self.potentiostat.connect()
-        if self.use_arm and self.arm is not None:
+        if self.arm:
             await self.arm.connect()
+        if self.mqtt:
+            await asyncio.to_thread(self.mqtt.connect)
 
         parents, children, edge_props = self._build_graph()
-        ready: Set[str] = set(self._roots(parents))
-        done: Set[str] = set()
-        running: Set[str] = set()
 
-        # 建立每条边的执行模式（sequential / parallel）
-        def edge_mode(src, dst):
+        def edge_mode(src: str, dst: str) -> str:
+            """Return the execution mode ('sequential' or 'parallel') for an edge."""
             e = edge_props.get((src, dst), {})
-            # 支持在 edge.data.mode 中声明并行/串行
-            return (e.get("data", {}) or {}).get("mode") or e.get("mode", "sequential")
+            return (e.get("data") or {}).get("mode") or e.get("mode", "sequential")
 
-        # 哪些子节点与同一父节点在 parallel 组
-        def parallel_groups(curr: str) -> List[List[str]]:
-            # 找到以 curr 为父的所有子节点，按 edge.mode 分组
-            seq_grp, par_grp = [], []
-            for ch in children.get(curr, []):
-                if edge_mode(curr, ch) == "parallel":
-                    par_grp.append(ch)
+        def parallel_groups(node: str) -> List[List[str]]:
+            """
+            Group the children of 'node' by how they should be launched.
+            Parallel-mode children are returned as a single group; each
+            sequential child is its own single-element group.
+            """
+            seq, par = [], []
+            for child in children.get(node, []):
+                if edge_mode(node, child) == "parallel":
+                    par.append(child)
                 else:
-                    seq_grp.append(ch)
+                    seq.append(child)
             groups = []
-            if par_grp:
-                groups.append(par_grp)  # 并行组
-            # sequential 的我们逐个发
-            for s in seq_grp:
+            if par:
+                groups.append(par)
+            for s in seq:
                 groups.append([s])
             return groups
 
-        # Kahn-like 调度，但遇到 parallel 组时并发执行
+        # Kahn-style traversal with parallel group support
+        ready: Set[str] = {nid for nid, p in parents.items() if not p}
+        if self.start_node is not None:
+            ready = {self.start_node}
+        done:  Set[str] = set()
+
         while ready:
-            # 按顺序取一个 ready 节点执行
             curr = ready.pop()
             if curr in done:
                 continue
-            if curr in running:
-                continue
 
-            # 执行 curr
             await self._run_node(curr)
             done.add(curr)
 
-            # 释放后继
-            for grp in parallel_groups(curr):
-                # 检查组内每个节点的所有父亲是否都完成
-                can_run = [n for n in grp if parents[n].issubset(done)]
-                if len(grp) == 1:
-                    # 串行: 直接加入 ready
-                    if can_run:
-                        ready.add(can_run[0])
-                else:
-                    # 并行：全部能跑才一起跑
-                    if set(can_run) == set(grp):
-                        # 同发
-                        await asyncio.gather(*(self._run_node(n) for n in grp))
-                        done.update(grp)
+            for group in parallel_groups(curr):
+                # Only launch a group when every member's parents are finished
+                runnable = [n for n in group if parents[n].issubset(done)]
+                if len(group) == 1:
+                    if runnable:
+                        ready.add(runnable[0])
+                elif set(runnable) == set(group):
+                    await asyncio.gather(*(self._run_node(n) for n in group))
+                    done.update(group)
 
-            # 同步更新：某些节点可能因上面并行组直接跑掉
-            # 将那些已满足父依赖但未执行的节点补进 ready
-            for nid, parents_set in parents.items():
-                if nid not in done and parents_set.issubset(done):
+            # Re-scan: some nodes may now be unblocked
+            for nid, pset in parents.items():
+                if nid not in done and pset.issubset(done):
                     ready.add(nid)
 
-        # 断开设备
-        if self.use_arm and self.arm is not None:
+        # Disconnect everything
+        if self.arm:
             await self.arm.disconnect()
         await self.potentiostat.disconnect()
         await self.otflex.disconnect()
-        print("[Workflow] All done.")
+        if self.mqtt:
+            await asyncio.to_thread(self.mqtt.disconnect)
 
-    # ========== 节点执行 ==========
-    async def _run_node(self, nid: str):
-        node = self.nodes_by_id[nid]
-        ntype = node["type"]
-        name = node.get("data", {}).get("label", ntype)
-        params = node.get("params") or node.get("data", {}).get("params") or {}
-        locks = params.get("resourceLocks") or node.get("resourceLocks") or []
+        print("[Workflow] Finished.")
+
+    # -----------------------------------------------------------------------
+    # Node dispatcher
+    # -----------------------------------------------------------------------
+
+    async def _run_node(self, nid: str) -> None:
+        node    = self.nodes_by_id[nid]
+        ntype   = node["type"]
+        label   = node.get("label") or node.get("data", {}).get("label", ntype)
+        params  = node.get("params") or node.get("data", {}).get("params") or {}
+        locks   = params.get("resourceLocks") or node.get("resourceLocks") or []
         retries = params.get("retries", 0)
         timeout = params.get("timeout", None)
 
-        async def _do():
-            print(f"[Node {nid}] {name} :: {ntype}")
-            # 简单路由
+        async def _execute():
+            print(f"[Node {nid}] {label} :: {ntype}")
+
             if ntype in ("input", "output"):
-                return
+                return  # graph boundary nodes — nothing to do
 
-            # Arm: position / gripper (check before otflex to catch otflexmyxarm)
-            if ntype.lower().startswith("otflexmyxarm") or ntype.lower().startswith("myxarm"):
-                await self._run_arm(ntype, params, locks)
-                return
-
-            # OT-Flex: transfer / gripper / wash / furnace / pump / electrode / reactor
-            if ntype.lower().startswith("otflex"):
-                await self._run_otflex(ntype, params, locks)
-                return
-
-            # sdl1 * 测量等
-            if ntype.lower().startswith("sdl1"):
-                await self._run_sdl1(ntype, params, locks)
-                return
-
-            # 默认：忽略
-            print(f"[Node {nid}] (no-op)")
-
-        await with_retry(_do, retries=retries, timeout=timeout, desc=f"node {nid}")
-
-    async def _run_otflex(self, ntype: str, p: Dict[str, Any], locks: List[str]):
-        async with self.resources.acquire_many(locks):
-            # 根据 ntype 分发
             key = ntype.lower()
-            if "tooltransfer" in key:
-                await self.otflex.toolTransfer(p)
-            elif "potentexperiment" in key:
-                await self.otflex.potentExperiment(p)
-            elif "flushwell" in key:
-                await self.otflex.flushWell(p)
-            elif "transfer" in key:
-                await self.otflex.transfer(p)
-            elif "gripper" in key:
-                await self.otflex.gripper(p)
-            elif "wash" in key:
-                await self.otflex.wash(p)
-            elif "furnace" in key:
-                await self.otflex.furnace(p)
-            elif "pump" in key:
-                await self.otflex.pump(p)
-            elif "electrode" in key:
-                await self.otflex.electrode(p)
-            elif "reactor" in key:
-                await self.otflex.reactor(p)
-            else:
-                print(f"[OTFlex] Unknown type: {ntype}")
 
-    async def _run_arm(self, ntype: str, p: Dict[str, Any], locks: List[str]):
-        if not self.use_arm or self.arm is None:
-            print(f"[Arm] Skipped node {ntype} because arm is disabled.")
+            if key.startswith("otflexmyxarm") or key.startswith("myxarm"):
+                await self._run_arm(ntype, params, locks)
+
+            elif key.startswith("otflex"):
+                await self._run_otflex(ntype, params, locks)
+
+            elif key.startswith("mqtt"):
+                await self._run_mqtt(ntype, params, locks)
+
+            elif key.startswith("sdl1"):
+                await self._run_sdl1(ntype, params, locks)
+
+            else:
+                print(f"[Node {nid}] Unknown type '{ntype}' — skipping.")
+
+        await with_retry(_execute, retries=retries, timeout=timeout, desc=f"node {nid}")
+
+    # -----------------------------------------------------------------------
+    # Per-family handlers
+    # -----------------------------------------------------------------------
+
+    async def _run_otflex(self, ntype: str, params: Dict[str, Any], locks: List[str]) -> None:
+        """Dispatch OTFlex liquid-handling nodes."""
+        async with self.resources.acquire_many(locks):
+            key = ntype.lower()
+            if   "tooltransfer"     in key: await self.otflex.toolTransfer(params)
+            elif "potentexperiment" in key: await self.otflex.potentExperiment(params)
+            elif "flushwell"        in key: await self.otflex.flushWell(params)
+            elif "transfer"         in key: await self.otflex.transfer(params)
+            elif "gripper"          in key: await self.otflex.gripper(params)
+            elif "wash"             in key: await self.otflex.wash(params)
+            elif "furnace"          in key: await self.otflex.furnace(params)
+            elif "electrode"        in key: await self.otflex.electrode(params)
+            elif "reactor"          in key: await self.otflex.reactor(params)
+            else:
+                print(f"[OTFlex] Unrecognised node type: {ntype}")
+
+    async def _run_arm(self, ntype: str, params: Dict[str, Any], locks: List[str]) -> None:
+        """Dispatch robotic arm nodes."""
+        if not self.arm:
+            print(f"[Arm] Arm disabled — skipping node '{ntype}'.")
             return
         async with self.resources.acquire_many(locks):
             key = ntype.lower()
-            if "run" in key or "sequence" in key:
-                await self.arm.run_sequence(p)
-            elif "position" in key or "move" in key:
-                await self.arm.move(p)
-            elif "gripper" in key:
-                await self.arm.gripper(p)
+            if   "run" in key or "sequence" in key: await self.arm.run_sequence(params)
+            elif "position" in key or "move" in key: await self.arm.move(params)
+            elif "gripper"  in key:                  await self.arm.gripper(params)
             else:
-                print(f"[Arm] Unknown type: {ntype}")
+                print(f"[Arm] Unrecognised node type: {ntype}")
 
-    async def _run_sdl1(self, ntype: str, p: Dict[str, Any], locks: List[str]):
+    async def _run_mqtt(self, ntype: str, params: Dict[str, Any], locks: List[str]) -> None:
+        """
+        Dispatch MQTT IoT nodes.
+
+        Node types and expected params
+        ┌─────────────────┬────────────────────────────────────────────────────┐
+        │ mqttWait        │ duration_s (float, optional), duration_ms (int)    │
+        │ mqttPump        │ channel (int), duration_ms (int, optional)         │
+        │ mqttPumpOff     │ channel (int)                                      │
+        │ mqttUltra       │ channel (int), duration_ms (int, optional)         │
+        │ mqttUltraOff    │ channel (int)                                      │
+        │ mqttHeat        │ channel (int), target_c (float)                    │
+        │                 │ pid (bool, default true), wait_s (float, optional) │
+        │ mqttHeatOff     │ channel (int)                                      │
+        │ mqttReactor     │ direction ("forward"/"reverse"), duration_ms (int) │
+        │ mqttReactorStop │ —                                                  │
+        │ mqttFurnace     │ action ("open"/"close"), duration_ms (int)         │
+        └─────────────────┴────────────────────────────────────────────────────┘
+        """
+        if self.mqtt is None:
+            print(f"[MQTT] No mqtt config in workflow — skipping node '{ntype}'.")
+            return
+
+        async with self.resources.acquire_many(locks):
+            key = ntype.lower()
+            m   = self.mqtt
+
+            # --- Workflow timing helper ---
+            if "wait" in key or "delay" in key or "pause" in key:
+                wait_s = params.get("duration_s")
+                if wait_s is None:
+                    wait_ms = params.get("duration_ms")
+                    wait_s = (float(wait_ms) / 1000.0) if wait_ms is not None else 0.0
+                wait_s = max(0.0, float(wait_s))
+                print(f"[MQTT] Waiting for {wait_s:.3f}s")
+                await asyncio.sleep(wait_s)
+                return
+
+            # --- Pumps ---
+            if "pump" in key:
+                if m.pumps is None:
+                    print("[MQTT] Pump device not configured.")
+                    return
+                ch = int(params.get("channel", 1))
+                if "off" in key:
+                    await asyncio.to_thread(m.pumps.off, ch)
+                else:
+                    dur = params.get("duration_ms")
+                    await asyncio.to_thread(m.pumps.on, ch, dur)
+
+            # --- Ultrasonic ---
+            elif "ultra" in key:
+                if m.ultra is None:
+                    print("[MQTT] Ultrasonic device not configured.")
+                    return
+                ch = int(params.get("channel", 1))
+                if "off" in key:
+                    await asyncio.to_thread(m.ultra.off, ch)
+                else:
+                    dur = params.get("duration_ms")
+                    await asyncio.to_thread(m.ultra.on, ch, dur)
+
+            # --- Heater ---
+            elif "heat" in key:
+                if m.heat is None:
+                    print("[MQTT] Heat device not configured.")
+                    return
+                ch = int(params.get("channel", 1))
+                if "off" in key:
+                    await asyncio.to_thread(m.heat.pid_off, ch)
+                    await asyncio.to_thread(m.heat.set_pwm, ch, 0)
+                    await asyncio.to_thread(m.heat.off, ch)
+                else:
+                    target_c = float(params["target_c"])
+                    use_pid  = bool(params.get("pid", True))
+                    await asyncio.to_thread(m.heat.set_target, ch, target_c)
+                    if use_pid:
+                        await asyncio.to_thread(m.heat.pid_on, ch)
+                    # Optional blocking wait for the temperature to stabilise
+                    wait_s = params.get("wait_s")
+                    if wait_s:
+                        await asyncio.sleep(float(wait_s))
+
+            # --- Reactor linear actuator ---
+            elif "reactor" in key:
+                if m.reactor is None:
+                    print("[MQTT] Reactor device not configured.")
+                    return
+                if "stop" in key:
+                    await asyncio.to_thread(m.reactor.stop)
+                else:
+                    direction = params.get("direction", "forward").lower()
+                    dur       = params.get("duration_ms")
+                    if direction == "forward":
+                        await asyncio.to_thread(m.reactor.forward, dur)
+                    else:
+                        await asyncio.to_thread(m.reactor.reverse, dur)
+                    # Keep Python-side timing aligned with firmware auto-stop windows.
+                    # This mirrors manual demo usage where a sleep follows timed motion.
+                    if dur is not None:
+                        wait_s = max(0.0, float(dur) / 1000.0)
+                        if wait_s > 0:
+                            print(f"[MQTT] Reactor command duration {wait_s:.3f}s; waiting in Python")
+                            await asyncio.sleep(wait_s)
+
+            # --- Furnace door ---
+            elif "furnace" in key:
+                if m.furnace is None:
+                    print("[MQTT] Furnace device not configured.")
+                    return
+                if "stop" in key:
+                    await asyncio.to_thread(m.furnace.stop)
+                else:
+                    action = params.get("action", "open").lower()
+                    dur    = params.get("duration_ms")
+                    if action == "open":
+                        await asyncio.to_thread(m.furnace.open, dur)
+                    else:
+                        await asyncio.to_thread(m.furnace.close, dur)
+                    if dur is not None:
+                        wait_s = max(0.0, float(dur) / 1000.0)
+                        if wait_s > 0:
+                            print(f"[MQTT] Furnace command duration {wait_s:.3f}s; waiting in Python")
+                            await asyncio.sleep(wait_s)
+
+            else:
+                print(f"[MQTT] Unrecognised node type: {ntype}")
+
+    async def _run_sdl1(self, ntype: str, params: Dict[str, Any], locks: List[str]) -> None:
+        """Dispatch SDL1 electrochemical measurement nodes."""
         async with self.resources.acquire_many(locks):
             key = ntype.lower()
             if "electrochemicalmeasurement" in key or "echem" in key or "potent" in key:
-                await self.potentiostat.echem_measure(p)
+                await self.potentiostat.echem_measure(params)
             else:
-                await self.otflex.echem_measure(p)
+                print(f"[SDL1] Unrecognised node type: {ntype}")
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--json", required=True, help="Path to Canvas FILLED JSON")
-    ap.add_argument("--no-arm", action="store_true", help="Disable arm initialization and arm nodes")
-    args = ap.parse_args()
 
-    wf = json.loads(Path(args.json).read_text(encoding="utf-8"))
-    runner = WorkflowRunner(wf, root_dir=Path(args.json).parent, use_arm=(not args.no_arm))
+# ---------------------------------------------------------------------------
+# CLI entry point
+# ---------------------------------------------------------------------------
 
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Run an SDL1 workflow JSON against the hardware stack."
+    )
+    parser.add_argument("--json",   required=True, help="Path to workflow JSON file")
+    parser.add_argument("--no-arm", action="store_true", help="Disable robotic arm")
+    parser.add_argument(
+        "--start-node",
+        default=None,
+        help="Node ID to start execution from; only this node and its downstream path are executed.",
+    )
+    args = parser.parse_args()
+
+    wf_path = Path(args.json)
+    wf      = json.loads(wf_path.read_text(encoding="utf-8"))
+
+    runner = WorkflowRunner(
+        wf,
+        root_dir=wf_path.parent,
+        use_arm=not args.no_arm,
+        start_node=args.start_node,
+    )
     asyncio.run(runner.run())
+
 
 if __name__ == "__main__":
     main()
-
-
-# python OER_module\OER_Flex\run_workflow.py --json  OER_module\OER_Flex\simple_test_workflow.json
