@@ -1,14 +1,10 @@
-# Runze Pump
+# Syringe Pump
 
 ## Purpose
-Peristaltic pump control module. Provides Python library for pump operation via MQTT.
+12-channel syringe-pump module used to support multiple liquid dispenses through the same outlet tube.
 
 ## Structure
-- `src/` - Python library
-- `firmware/` - Device firmware
-- `mechanical/` - CAD models and mechanical documentation
-- `electrical/` - Wiring and electrical schematics
-- `documentation/` - Usage and specifications
+- `src/` - Python control code, tests, and dependencies
 
-## Status
-_To be filled in_
+## Notes
+Use this module when workflows require multi-source liquid handling with a shared dispense path.

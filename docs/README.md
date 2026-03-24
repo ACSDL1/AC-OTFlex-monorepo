@@ -1,15 +1,14 @@
 # Documentation
 
-## Purpose
 System-wide documentation including architecture, setup, usage, and contribution guidelines.
 
-## Structure
-- `ARCHITECTURE.md` - System design and component relationships
+## Structure 
+> Best to read in order
+
 - `SETUP.md` - Installation and environment setup
 - `USAGE.md` - How to use the system
 - `CONTRIBUTING.md` - Contribution guidelines
-- `workflows/` - Workflow documentation
-- `api/` - API reference documentation
+- `architecture/README.md` - System design and component overview
+- `changelog/` - Version history and updates 
+- `images/` - Any images of the system worth keeping track of
 
-## Status
-_To be filled in_

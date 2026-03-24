@@ -2,426 +2,117 @@
 
 ## Prerequisites
 
-- **Python:** 3.8 or higher
+- **Python:** 3.8 or higher (just get latest)
 - **pip:** Package installer for Python
 - **Git:** Version control (optional but recommended)
+- **Mosquitto MQTT Broker:** For MQTT communication
 
 ## System Requirements
 
 ### OS Support
 Windows, macOS, or Linux with Python 3.8+
 
-### Network Requirements
-- Opentrons Flex: Network connectivity (default IP: 169.254.179.32)
-- xArm Robot: Network connectivity (default IP: 192.168.1.113)
-- Arduino: USB serial connection (default: COM4)
+## Installation
 
-## Installation Steps
-
-### 1. Clone or Download Repository
+### 1. Clone Repository
 
 ```bash
-git clone <repository-url>
-cd AC_OTFlex_Workflow
+git clone https://github.com/ACSDL1/AC-OTFlex-monorepo.git
+cd AC-OTFlex-monorepo
 ```
 
-Or download and extract the ZIP file.
-
-### 2. Verify Python Installation
-
-```bash
-python --version
-# Should output: Python 3.8.0 or higher
-
-python -m venv --help
-# Verify venv module is available
-```
-
-### 3. Create Virtual Environment
+### 2. Create Virtual Environment
 
 ```bash
 # On Windows:
-python -m venv venv
-venv\Scripts\activate
+python -m venv .venv
+.venv\Scripts\activate
 
 # On macOS/Linux:
-python -m venv venv
-source venv/bin/activate
+python -m venv .venv
+source .venv/bin/activate
 ```
 
-You should see `(venv)` prefix in your terminal.
+You should see `(.venv)` prefix in your terminal.
+This is where all dependencies will be installed, keeping your system Python clean.
 
-### 4. Install Dependencies
+### 3. Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-This installs all required packages including:
-- `requests` - HTTP client for Opentrons
-- `xarm-python-sdk` - xArm robot control
-- `pyserial` - Arduino serial communication
-- `pandas` - Data handling
-- `numpy` - Numerical computation
+## Networking Config 
+> IMPORTANT: MQTT AND XARM RELIES ON CORRECT IPV4 ADDRESS OF HOST MACHINE
 
-### 5. Verify Installation
+Set these host-side IPv4 addresses:
+- MQTT network: `192.168.0.100/24`
+- xArm network: `192.168.1.100/24`
 
-```bash
-python -c "import requests; import pandas; import numpy; print('✓ Core packages installed')"
-```
+You can add both addresses to the same NIC (if that is how your lab network is wired) or split them across two NICs.
 
-For xArm SDK (optional):
-```bash
-python -c "from xarm.wrapper import XArmAPI; print('✓ xArm SDK installed')"
-```
+### Linux
 
-## Configuration
-
-### 1. Create User Configuration File
+1. Find your interface name:
 
 ```bash
-cp config/example_config.json config/user_config.json
+ip -br addr
 ```
 
-### 2. Edit Configuration
-
-Open `config/user_config.json` and update:
-
-```json
-{
-  "opentrons": {
-    "controller_ip": "YOUR_ROBOT_IP",  // e.g., 169.254.179.32
-    "robot_type": "flex"
-  },
-  "arm": {
-    "controller_ip": "YOUR_ARM_IP",    // e.g., 192.168.1.113
-    "port": 5001
-  },
-  "arduino": {
-    "fallback_port": "COM4",           // On Linux: /dev/ttyUSB0
-    "baud_rate": 115200
-  }
-}
-```
-
-### 3. Device-Specific Configuration
-
-#### Opentrons Flex
-
-1. **Find IP Address:**
-   - Power on Opentrons Flex
-   - On robot's touchscreen: Settings → Network → IP Address
-   - Default: `169.254.179.32`
-
-2. **Test Connection:**
-   ```bash
-   python tests/test_opentrons.py --ip 169.254.179.32 --test connection
-   ```
-
-#### xArm Robot
-
-1. **Find IP Address:**
-   - Power on xArm
-   - Check xArm controller or network router
-   - Default: `192.168.1.113`
-
-2. **Test Connection:**
-   ```bash
-   python tests/test_arm.py --ip 192.168.1.113 --dry-run
-   ```
-
-#### Arduino Furnace
-
-1. **Find Serial Port:**
-   ```bash
-   python tests/test_furnace.py --test find-port
-   ```
-   
-   **Windows:** Look for COM3, COM4, COM5, etc.
-   
-   **Linux/macOS:** Look for /dev/ttyUSB0, /dev/ttyACM0, etc.
-
-2. **Update Configuration:**
-   ```json
-   {
-     "arduino": {
-       "fallback_port": "COM4"  // Or /dev/ttyUSB0
-     }
-   }
-   ```
-
-3. **Test Connection:**
-   ```bash
-   python tests/test_furnace.py --port COM4 --test connection
-   ```
-
-## Verify Installation
-
-### Quick Test
+2. Add the addresses (replace `enp4s0` with your interface):
 
 ```bash
-# Dry-run all component tests
-python tests/run_all_tests.py --dry-run
+sudo ip addr add 192.168.0.100/24 dev enp4s0
+sudo ip addr add 192.168.1.100/24 dev enp4s0
 ```
 
-Expected output:
-```
-=== Opentrons Flex Test Suite ===
-✓ Opentrons connectivity: PASSED
-✓ Labware loading: PASSED
-...
+This matches your working setup style (for example, using `enp4s0`).
 
-=== UFactory xArm Test Suite ===
-✓ xArm SDK availability: PASSED
-...
-
-=== Arduino Furnace Control Test Suite ===
-✓ Arduino serial connection: PASSED
-...
-
-=== Overall Results ===
-All tests PASSED ✓
-```
-
-### Component-Specific Tests
+3. Verify:
 
 ```bash
-# Test Opentrons only
-python tests/test_opentrons.py --test all
-
-# Test ARM only
-python tests/test_arm.py --test all --dry-run
-
-# Test Arduino only
-python tests/test_furnace.py --test all
-
-# Test workflow parsing
-python tests/test_workflows.py --test list
+ip -br addr show dev enp4s0
 ```
 
-## Troubleshooting
+Note: `ip addr add` is temporary and resets on reboot unless persisted via NetworkManager/netplan/systemd-networkd.
 
-### Python Version Issues
+### Windows
 
-**Error:** `ModuleNotFoundError: No module named 'asyncio'`
+Run PowerShell as Administrator.
 
-**Solution:** Upgrade Python to 3.8+
-```bash
-python --version
-# If < 3.8, install Python 3.8+
+1. Find your adapter name:
+
+```powershell
+Get-NetAdapter
 ```
 
-### Virtual Environment Issues
+2. Add both addresses (replace `Ethernet` with your adapter alias):
 
-**Error:** `python: No module named venv`
-
-**Solution:** Install venv module
-```bash
-# Ubuntu/Debian
-sudo apt-get install python3-venv
-
-# macOS
-brew install python3
-
-# Windows
-# Reinstall Python with venv option
+```powershell
+New-NetIPAddress -InterfaceAlias "Ethernet" -IPAddress 192.168.0.100 -PrefixLength 24 -AddressFamily IPv4
+New-NetIPAddress -InterfaceAlias "Ethernet" -IPAddress 192.168.1.100 -PrefixLength 24 -AddressFamily IPv4
 ```
 
-### Package Installation Issues
+3. Verify:
 
-**Error:** `pip: command not found`
-
-**Solution:** Use python -m pip
-```bash
-python -m pip install -r requirements.txt
+```powershell
+Get-NetIPAddress -InterfaceAlias "Ethernet" -AddressFamily IPv4
 ```
 
-**Error:** `Permission denied` when installing
+Alternative (GUI):
+Control Panel > Network and Sharing Center > Change adapter settings > Right-click adapter > Properties > Internet Protocol Version 4 (TCP/IPv4) > Advanced > Add both IP addresses.
 
-**Solution:** Use --user flag
-```bash
-pip install --user -r requirements.txt
-```
 
-### Cannot Connect to Opentrons
 
-**Error:** `Connection refused` or `timeout`
+## MQTT Config 
+The system uses MQTT for communication between the core control and devices. You can use Mosquitto as the MQTT broker.
 
-**Checklist:**
-1. Is Opentrons powered on? ✓
-2. Is IP address correct? ✓
-3. Are you on the same network? ✓
-4. Is firewall blocking port 31950? ✓
+Jump to Alan's [MQTT Setup README](../config/mqtt/README.md) for detailed setup instructions
 
-**Test:**
-```bash
-ping 169.254.179.32
-# Should respond with pings
+## Hardware Setup
+Refer to the individual device repositories in `devices/` for hardware-specific setup instructions. Each device type (pump, heater, furnace, reactor, etc.) has its own README with wiring diagrams, connection instructions, and testing procedures.
+> this should already be setup and tested by GavinT, but listed here for completeness
 
-curl -X GET http://169.254.179.32:31950/runs
-# Should return JSON response
-```
+## Usage
+Jump to [docs/USAGE.md](USAGE.md) for how to run the system and execute workflows.
 
-### Cannot Connect to xArm
-
-**Error:** `Connection timeout`
-
-**Checklist:**
-1. Is xArm powered on? ✓
-2. Is xArm connected to network? ✓
-3. Is IP address correct? ✓
-4. Is port 5001 open? ✓
-
-**Test:**
-```bash
-python -c "from xarm.wrapper import XArmAPI; arm = XArmAPI('192.168.1.113'); print(arm.get_version())"
-```
-
-### Cannot Find Arduino
-
-**Error:** `No Arduino ports found`
-
-**Checklist:**
-1. Is Arduino plugged in? ✓
-2. Is Arduino recognized by OS? ✓
-3. Is driver installed? ✓
-
-**Diagnose:**
-```bash
-# Windows - List COM ports
-wmic logicaldisk get name
-wmic pnpdevice where "DeviceID like 'COM%'" list
-Get-WmiObject Win32_PnPEntity | Where-Object { $_.Name -match "COM" }
-
-# Linux/macOS
-ls /dev/tty*
-ls /dev/cu.*
-```
-
-**Install Drivers:**
-- CH340 chip: https://sparks.gogo.co.nz/ch340.html
-- FTDI chip: https://www.ftdichip.com/Drivers/D2XX.htm
-
-### Import Errors
-
-**Error:** `ModuleNotFoundError: No module named 'xarm'`
-
-**Solution:**
-```bash
-pip install xarm-python-sdk
-```
-
-**Error:** `ModuleNotFoundError: No module named 'requests'`
-
-**Solution:**
-```bash
-pip install -r requirements.txt
-```
-
-## Development Setup
-
-### Clone Repository with Git
-
-```bash
-git clone <repository-url>
-cd AC_OTFlex_Workflow
-```
-
-### For Code Editors
-
-#### VS Code
-
-1. Install Python extension
-2. Select Python interpreter:
-   - Command: Python: Select Interpreter
-   - Choose: `./venv/bin/python`
-
-3. Install useful extensions:
-   - Python Docstring Generator
-   - Pylance
-   - Git History
-
-#### PyCharm
-
-1. Open project
-2. Configure interpreter:
-   - Settings → Project → Python Interpreter
-   - Add venv: `./venv/bin/python`
-
-## Production Deployment
-
-### Before First Run
-
-1. **Backup Configurations:**
-   ```bash
-   cp config/user_config.json config/user_config.json.backup
-   ```
-
-2. **Check Hardware:**
-   - Opentrons: Test run simple commands
-   - xArm: Home robot and check motion
-   - Arduino: Verify serial communication
-
-3. **Run Validation:**
-   ```bash
-   python tests/test_workflows.py --test all
-   ```
-
-### Emergency Stop
-
-If something goes wrong:
-
-1. **Kill Python Process:**
-   ```bash
-   # Windows
-   taskkill /IM python.exe /F
-
-   # Linux/macOS
-   killall python3
-   ```
-
-2. **Kill Important Processes:**
-   ```bash
-   # Windows
-   taskkill /IM opentrons.exe /F
-
-   # Hardware disconnect
-   ```
-
-3. **Check Logs:**
-   ```bash
-   cat logs/workflow.log  # Linux/macOS
-   type logs\workflow.log  # Windows
-   ```
-
-## Next Steps
-
-1. Review [USAGE.md](USAGE.md) for how to create workflows
-2. Check [ARCHITECTURE.md](ARCHITECTURE.md) for system design
-3. Review example workflows in `data/workflows/`
-4. Run tests to verify setup
-
-## Getting Help
-
-1. **Check Logs:**
-   ```bash
-   tail -f logs/workflow.log
-   ```
-
-2. **Run Diagnostic Tests:**
-   ```bash
-   python tests/run_all_tests.py --dry-run
-   ```
-
-3. **Consult Documentation:**
-   - [ARCHITECTURE.md](ARCHITECTURE.md) - System design
-   - [USAGE.md](USAGE.md) - How to use
-   - Test files - Example code
-
-## Support
-
-For issues or questions:
-1. Check troubleshooting section above
-2. Review test output
-3. Check documentation
-4. Contact system administrator
