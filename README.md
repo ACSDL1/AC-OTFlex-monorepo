@@ -22,10 +22,9 @@ AC-OTFlex-monorepo/
 │   ├── default_config.json       # Baseline runtime configuration
 │   ├── user.json                 # User-specific settings
 │   └── README.md
-├── data/                          # Experiment inputs, labware, and workflow assets
+├── data/                          # Experiment inputs and labware assets
 │   ├── device_configs/           # Device parameter definitions
 │   ├── labware_definitions/      # Opentrons-compatible labware JSON
-│   ├── workflows/                # Workflow JSON assets and examples
 │   └── out/                      # Generated outputs/artifacts
 ├── devices/                       # Hardware module repositories by device type
 │   ├── furnace/
@@ -47,7 +46,6 @@ AC-OTFlex-monorepo/
 │   └── README.md
 ├── scripts/                       # Utility and hardware helper scripts
 │   ├── archived_potentiostat/
-│   ├── inspect_workflow.py
 │   ├── home_opentrons.py
 │   └── README.md
 ├── src/                           # Core Python package for orchestration and adapters

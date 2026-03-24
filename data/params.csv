@@ -1,6 +1,0 @@
-Well ID,Well Name,solution A position,solution A volume,solution B position,solution B volume,solution C position,solution C volume,solution D position,solution D volume,temperature,deposition current,deposition time
-1,A1,A1,50,B3,25,,, , ,25,0.50,120
-2,B1,A2,40,B1,10,C5,20,,, ,30,0.75,180
-5,C1,A4,60,,,,,,, ,25,0.40,90
-7,A2,B2,30,B4,30,,,, ,22,0.60,150
-12,B2,A3,50,C1,10,D2,10,,, ,28,0.80,200
