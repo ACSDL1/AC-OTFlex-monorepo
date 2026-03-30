@@ -8,7 +8,7 @@
 
       "B1": { "name": "auto_reactor",               "display": "auto_reactor",                  "labware": "custom_auto_reactor" },
       "B2": { "name": "source_plate",               "display": "precursor_vials",               "labware": "nest_12_reservoir_15ml" },
-      "B3": { "name": "reactor_plate",              "display": "reactor",                       "labware": "corning_96_wellplate_360ul_flat" },
+      "B3": { "name": "sonicator",                  "display": "sonicator",                     "labware": "nis_2_sonicator_bath" },
 
       "C1": { "name": "tiprack_50ul",               "display": "tiprack_50ul",                  "labware": "opentrons_flex_96_tiprack_50ul" },
       "C2": { "name": "vial_cap_storage",           "display": "vial_cap_storage",              "labware": "custom_vial_cap_holder" },
@@ -22,10 +22,6 @@
       "left":  { "model": "p1000_single_flex", "mount": "left" },
       "right": { "model": "flex_gripper",        "mount": "right" }
     }
-  },
-  "arduino": {
-    "port": "/dev/ttyACM0",
-    "baudrate": 115200
   },
   "gripper_slots": {
     "A1": { "pick": [230, 260, 63],  "place": [230, 260, 63],  "safe_z": 150 },

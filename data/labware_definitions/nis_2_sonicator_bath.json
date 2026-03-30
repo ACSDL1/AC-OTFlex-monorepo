@@ -1,0 +1,72 @@
+{
+    "ordering": [
+        [
+            "A1",
+            "A2"
+        ]
+    ],
+    "brand": {
+        "brand": "Nis",
+        "brandId": [
+            "tool",
+            "sonicator_bath"
+        ]
+    },
+    "metadata": {
+        "displayName": "Nis sonicator bath rack",
+        "displayCategory": "other",
+        "displayVolumeUnits": "µL",
+        "tags": []
+    },
+    "dimensions": {
+        "xDimension": 127.75,
+        "yDimension": 85.5,
+        "zDimension": 120
+    },
+    "wells": {
+        "A1": {
+            "depth": 94,
+            "totalLiquidVolume": 1,
+            "shape": "circular",
+            "diameter": 8,
+            "x": 38,
+            "y": 43.5,
+            "z": 26
+        },
+        "A2": {
+            "depth": 94,
+            "totalLiquidVolume": 1,
+            "shape": "circular",
+            "diameter": 8,
+            "x": 88,
+            "y": 43.5,
+            "z": 26
+        }
+    },
+    "groups": [
+        {
+            "metadata": {
+                "wellBottomShape": "flat"
+            },
+            "wells": [
+                "A1",
+                "A2"
+            ]
+        }
+    ],
+    "parameters": {
+        "format": "irregular",
+        "quirks": [],
+        "isMagneticModuleCompatible": false,
+        "loadName": "nis_2_sonicator_bath",
+        "isTiprack": false
+    },
+    "namespace": "custom_beta",
+    "version": 1,
+    "schemaVersion": 2,
+    "cornerOffsetFromSlot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+    }
+}
