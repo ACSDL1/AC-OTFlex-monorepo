@@ -302,6 +302,8 @@ class OTFlex:
             "in_pump_id": p.get("in_pump_id"),
             "out_pump_id": p.get("out_pump_id"),
             "time_ms": p.get("time_ms"),
+            "in_time_ms": p.get("in_time_ms"),
+            "out_time_ms": p.get("out_time_ms"),
             "repeats": p.get("repeats"),
             "purge_ms": p.get("purge_ms"),
             "return_dZ": self._norm_num(p.get("return_dZ", 12.0)),

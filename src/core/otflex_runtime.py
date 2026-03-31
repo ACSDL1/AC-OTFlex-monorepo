@@ -496,8 +496,13 @@ class _OTFlexRuntime:
             target_offset_y = float(to_obj.get('offsetY', -34.5))
             target_offset_z = float(to_obj.get('offsetZ', 0.0))
 
-        # Pump-cycle parameters (defaults keep previous behavior if not provided)
-        time_ms = float(p.get('time_ms', 10.0))
+        # Pump-cycle parameters (treat missing/None as defaults)
+        def _as_float(value, default):
+            return float(default if value is None else value)
+
+        time_ms = _as_float(p.get('time_ms'), 10.0)
+        in_time_ms = _as_float(p.get('in_time_ms'), time_ms)
+        out_time_ms = _as_float(p.get('out_time_ms'), time_ms)
         repeats = int(p.get('repeats', 1))
         in_pump_id = int(p.get('in_pump_id', 2))
         out_pump_id = int(p.get('out_pump_id', 0))
@@ -514,8 +519,8 @@ class _OTFlexRuntime:
         print(f"[OTFlex][DEBUG] Flush well operation")
         print(f"[OTFlex][DEBUG] From: {from_lw}.{from_well}")
         print(f"[OTFlex][DEBUG] To: {to_lw}.{to_wells}")
-        print(f"[OTFlex][DEBUG] Repeats: {repeats} times, duration: {time_ms}ms")
-        print(f"[OTFlex][DEBUG] Pump cycle: in={in_pump_id} for {time_ms}ms, out={out_pump_id} for {time_ms}ms")
+        print(f"[OTFlex][DEBUG] Repeats: {repeats} times")
+        print(f"[OTFlex][DEBUG] Pump cycle: in={in_pump_id} for {in_time_ms}ms, out={out_pump_id} for {out_time_ms}ms")
 
         from_lw_id = self.lw_ids.get(from_lw, from_lw)
         to_lw_id = self.lw_ids.get(to_lw, to_lw)
@@ -560,10 +565,10 @@ class _OTFlexRuntime:
             )
 
             # Run MQTT pump flushing
-            print(f"[OTFlex] Starting operation at {current_well} for {time_ms}ms")
+            print(f"[OTFlex] Starting operation at {current_well}")
             for _ in range(repeats):
-                self._run_pump_flush(in_pump_id, time_ms)
-                self._run_pump_flush(out_pump_id, time_ms)
+                self._run_pump_flush(in_pump_id, in_time_ms)
+                self._run_pump_flush(out_pump_id, out_time_ms)
                 if purge_ms > 0:
                     self._run_pump_flush(out_pump_id, purge_ms)
             print(f"[OTFlex] Completed all pump cycles at {current_well}")
