@@ -566,11 +566,15 @@ class _OTFlexRuntime:
 
             # Run MQTT pump flushing
             print(f"[OTFlex] Starting operation at {current_well}")
+            print(f"[OTFlex] Priming OUT pump {out_pump_id} for {out_time_ms}ms")
+            self._run_pump_flush(out_pump_id, out_time_ms)
             for _ in range(repeats):
                 self._run_pump_flush(in_pump_id, in_time_ms)
                 self._run_pump_flush(out_pump_id, out_time_ms)
                 if purge_ms > 0:
                     self._run_pump_flush(out_pump_id, purge_ms)
+            print(f"[OTFlex] Final OUT pump {out_pump_id} for {out_time_ms}ms")
+            self._run_pump_flush(out_pump_id, out_time_ms)
             print(f"[OTFlex] Completed all pump cycles at {current_well}")
 
         # Step 4: Retract electrode from last well
