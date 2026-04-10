@@ -13,6 +13,9 @@ Pillow>=10.0.0            # PIL image processing for notebook image rotation
 # xArm robot control
 xarm-python-sdk>=1.13.0   # UFactory xArm SDK
 
+# Matter Labs RunzePump SDK
+medusa-sdl[all]
+
 # Development and testing (optional)
 pytest>=7.0               # Testing framework
 pytest-asyncio>=0.20.0    # Async test support
