@@ -30,26 +30,16 @@ sudo systemctl enable mosquitto
 
 ---
 
+## WINDOWS STEP Add Mosquitto to PATH
+1. Open **System Properties** → **Environment Variables**.
+2. Edit the `Path` variable under System variables.
+3. Add the directory where `mosquitto.exe` is located (e.g., `
+C:\Program Files\mosquitto\`).
+4. Open a new terminal and run `mosquitto` to verify.
+
 ## 2) Configuration File
 
-Edit paths in `mosquitto.conf` to match your machine (Windows example shown):
-
-```conf
-listener 1883
-allow_anonymous false
-
-# Auth files (edit these paths!)
-password_file "C:/Program Files/mosquitto/passwd"
-acl_file      "C:/Program Files/mosquitto/aclfile.txt"
-
-# Persistence (safe restarts, retained messages)
-persistence true
-persistence_location "C:/Program Files/mosquitto/data/"
-
-# Optional: logging
-log_timestamp true
-log_type all
-```
+Edit paths in `mosquitto.conf` to match your machine (Windows example provided in this folder [mosquitto.conf](mosquitto.conf)).
 
 > On Linux, typical paths are `/etc/mosquitto/mosquitto.conf`,
 > `/etc/mosquitto/passwd`, `/etc/mosquitto/aclfile.txt`, and `/var/lib/mosquitto/`.
@@ -60,6 +50,9 @@ log_type all
 
 Create users with `mosquitto_passwd`.
 **Important:** `-c` creates/overwrites the file—use it *once*.
+
+The typical password that all devices expect is `controller`
+- This can be verified by seeing the firmware running on all the IoT devices in the `devices/` folder, which use `controller` as the password.
 
 ```bash
 # First time only (creates the file)
@@ -125,7 +118,8 @@ topic write heat/01/target/#
 **Windows (console):**
 
 ```powershell
-"C:\Program Files\mosquitto\mosquitto.exe" -v -c "C:\Program Files\mosquitto\mosquitto.conf"
+cd <path_to_mosquitto>
+mosquitto -v -c mosquitto.conf
 ```
 
 **Linux (service):**
