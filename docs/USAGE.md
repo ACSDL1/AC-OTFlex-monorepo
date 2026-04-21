@@ -50,6 +50,9 @@ Scripts in `scripts/archived_potentiostat/` are experimental potentiostat-relate
 
 ## Running Workflows
 
+### Mosquitto MQTT daemon/background process
+Windows? Run the `scripts/start_broker.bat` batch file in a new terminal window and leave running. 
+
 ### About Workflow Notebooks
 
 All workflows are implemented as Jupyter notebooks in the `notebooks/workflows/` directory. Each notebook file represents a complete workflow, and each cell within a notebook represents a single task or function execution.

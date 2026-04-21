@@ -1,0 +1,1 @@
+mosquitto -v -c "C:\Program Files\Mosquitto\mosquitto.conf"  
