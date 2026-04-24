@@ -137,4 +137,4 @@ Thumbs.db
 logs/
 *.tmp
 .opentrons_cache/
-data/out/images
+data/out/
