@@ -6,3 +6,10 @@ Driver for the Biologic VSP-3e potentiostat.
 
 ![Connection Diagram](docs/connection-diagram.png)
 
+## SSH via paramiko to run commands
+- src/SSH_RemoteCommands.ipynb
+- attempt to run biologic commands over IP on other computer
+    - it was noted that multiple channels of the biologic can be used in parallel by 1 computer
+        - this fact will be exploited to run biologic commands from this ot-flex client computer
+        
+
