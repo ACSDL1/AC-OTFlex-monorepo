@@ -6,6 +6,9 @@ __pycache__/
 # C extensions
 *.so
 
+# MQTT certificates
+mqtt_certs
+
 # Distribution / packaging
 .Python
 build/
