@@ -11,7 +11,7 @@
       "B3": { "name": "sonicator",                  "display": "sonicator",                     "labware": "nis_2_sonicator_bath" },
 
       "C1": { "name": "tiprack_50ul",               "display": "tiprack_50ul",                  "labware": "opentrons_flex_96_tiprack_50ul" },
-      "C2": { "name": "vial_cap_storage",           "display": "vial_cap_storage",              "labware": "custom_vial_cap_holder" },
+      "C2": { "name": "vial_cap_storage",           "display": "vial_cap_storage",              "labware": "custom_vial_cap_holder", "file": "data/labware_definitions/amlab_96_tiprack_1000ul.json" },
       "C3": { "name": "tiprack_1000ul",             "display": "tiprack_1000ul",                "labware": "opentrons_flex_96_tiprack_1000ul" },
 
       "D1": { "name": "substrate_storage",          "display": "substrate_storage",             "labware": "custom_substrate_storage" },
