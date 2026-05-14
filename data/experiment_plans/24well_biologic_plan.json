@@ -1,6 +1,5 @@
 {
   "plan_version": 1,
-  "batch_id": "kevin_24well_model_batch_001",
   "notes": "Template for model-selected 24-well solution mixtures and Biologic techniques. Edit experiments[*].solution and experiments[*].biologic to change the batch.",
   "defaults": {
     "reactor_labware": "auto_reactor",
@@ -28,7 +27,6 @@
     "biologic": {
       "channel": 4,
       "usb_port": "USB0",
-      "experiment_id": "{batch_id}_{well}",
       "timeout_s": 900,
       "techniques": [
         {

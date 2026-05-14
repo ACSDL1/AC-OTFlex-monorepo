@@ -733,6 +733,22 @@ class BiologicBatchRunner:
             self.ssh.close()
             self.ssh = None
 
+    def upload_techniques_builder(self) -> str:
+        if self.ssh is None or self.remote_work_dir is None:
+            raise RuntimeError("BiologicBatchRunner is not connected")
+
+        local_path = find_repo_root(Path(__file__)) / "src" / "OT2_Biologic_Files" / "techniques_builder.py"
+        if not local_path.exists():
+            raise RuntimeError(f"techniques_builder.py not found: {local_path}")
+
+        remote_path = posixpath.join(self.remote_work_dir, "techniques_builder.py")
+        sftp = self.ssh.open_sftp()
+        try:
+            sftp.put(str(local_path), remote_path)
+        finally:
+            sftp.close()
+        return remote_path
+
     def run_experiment(
         self,
         plan: dict[str, Any],
@@ -773,6 +789,7 @@ class BiologicBatchRunner:
         runner_path = posixpath.join(self.remote_work_dir, f"run_{experiment_id}.bat")
         py = self.biologic_params.get("python_executable", "python")
         conda_env = self.biologic_params.get("conda_env", "ot2_workflow")
+        remote_techniques_builder = self.upload_techniques_builder()
         remote_script = _remote_script(
             channel=int(bio.get("channel", self.biologic_params.get("channel", 4))),
             usb_port=bio.get("usb_port", self.biologic_params.get("device_address", "USB0")),
@@ -826,6 +843,7 @@ if errorlevel 1 exit /b %errorlevel%
                     f"well: {well}",
                     f"experiment_id: {experiment_id}",
                     f"remote_results_dir: {remote_results_dir}",
+                    f"remote_techniques_builder: {remote_techniques_builder}",
                     "",
                     "=== STDOUT ===",
                     *output_lines,
