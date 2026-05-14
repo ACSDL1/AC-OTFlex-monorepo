@@ -1,0 +1,465 @@
+{
+  "plan_version": 1,
+  "batch_id": "kevin_24well_model_batch_001",
+  "notes": "Template for model-selected 24-well solution mixtures and Biologic techniques. Edit experiments[*].solution and experiments[*].biologic to change the batch.",
+  "defaults": {
+    "reactor_labware": "auto_reactor",
+    "source_labware": "source_plate",
+    "pipette": "p1000_single_flex",
+    "tiprack": "tiprack_1000ul",
+    "autopick_tip": true,
+    "solution_move_speed": 120,
+    "solution_from_offset": {
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetZ": 5
+    },
+    "solution_to_offset": {
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetZ": 20
+    },
+    "max_reactor_volume_uL": 2664,
+    "electrode_source_labware": "electrode_module",
+    "electrode_source_well": "A1",
+    "electrode_descent_at_well_mm": 25.0,
+    "electrode_move_speed": 80,
+    "electrode_return_dZ": 12.0,
+    "biologic": {
+      "channel": 4,
+      "usb_port": "USB0",
+      "experiment_id": "{batch_id}_{well}",
+      "timeout_s": 900,
+      "techniques": [
+        {
+          "type": "ocv",
+          "params": {
+            "rest_time_s": 10,
+            "record_every_dT": 0.1,
+            "record_every_dE": 10
+          }
+        }
+      ]
+    }
+  },
+  "liquids": {
+    "precursor_A": {
+      "source_labware": "source_plate",
+      "source_well": "A1"
+    },
+    "precursor_B": {
+      "source_labware": "source_plate",
+      "source_well": "A2"
+    }
+  },
+  "experiments": [
+    {
+      "well": "A1",
+      "enabled": true,
+      "solution": [
+        {
+          "liquid": "precursor_A",
+          "source_well": "A1",
+          "volume_uL": 500
+        },
+        {
+          "liquid": "precursor_B",
+          "source_well": "A2",
+          "volume_uL": 500
+        }
+      ],
+      "biologic": {}
+    },
+    {
+      "well": "B1",
+      "enabled": true,
+      "solution": [
+        {
+          "liquid": "precursor_A",
+          "source_well": "A1",
+          "volume_uL": 500
+        },
+        {
+          "liquid": "precursor_B",
+          "source_well": "A2",
+          "volume_uL": 500
+        }
+      ],
+      "biologic": {}
+    },
+    {
+      "well": "C1",
+      "enabled": true,
+      "solution": [
+        {
+          "liquid": "precursor_A",
+          "source_well": "A1",
+          "volume_uL": 500
+        },
+        {
+          "liquid": "precursor_B",
+          "source_well": "A2",
+          "volume_uL": 500
+        }
+      ],
+      "biologic": {}
+    },
+    {
+      "well": "D1",
+      "enabled": true,
+      "solution": [
+        {
+          "liquid": "precursor_A",
+          "source_well": "A1",
+          "volume_uL": 500
+        },
+        {
+          "liquid": "precursor_B",
+          "source_well": "A2",
+          "volume_uL": 500
+        }
+      ],
+      "biologic": {}
+    },
+    {
+      "well": "A2",
+      "enabled": true,
+      "solution": [
+        {
+          "liquid": "precursor_A",
+          "source_well": "A1",
+          "volume_uL": 500
+        },
+        {
+          "liquid": "precursor_B",
+          "source_well": "A2",
+          "volume_uL": 500
+        }
+      ],
+      "biologic": {}
+    },
+    {
+      "well": "B2",
+      "enabled": true,
+      "solution": [
+        {
+          "liquid": "precursor_A",
+          "source_well": "A1",
+          "volume_uL": 500
+        },
+        {
+          "liquid": "precursor_B",
+          "source_well": "A2",
+          "volume_uL": 500
+        }
+      ],
+      "biologic": {}
+    },
+    {
+      "well": "C2",
+      "enabled": true,
+      "solution": [
+        {
+          "liquid": "precursor_A",
+          "source_well": "A1",
+          "volume_uL": 500
+        },
+        {
+          "liquid": "precursor_B",
+          "source_well": "A2",
+          "volume_uL": 500
+        }
+      ],
+      "biologic": {}
+    },
+    {
+      "well": "D2",
+      "enabled": true,
+      "solution": [
+        {
+          "liquid": "precursor_A",
+          "source_well": "A1",
+          "volume_uL": 500
+        },
+        {
+          "liquid": "precursor_B",
+          "source_well": "A2",
+          "volume_uL": 500
+        }
+      ],
+      "biologic": {}
+    },
+    {
+      "well": "A3",
+      "enabled": true,
+      "solution": [
+        {
+          "liquid": "precursor_A",
+          "source_well": "A1",
+          "volume_uL": 500
+        },
+        {
+          "liquid": "precursor_B",
+          "source_well": "A2",
+          "volume_uL": 500
+        }
+      ],
+      "biologic": {}
+    },
+    {
+      "well": "B3",
+      "enabled": true,
+      "solution": [
+        {
+          "liquid": "precursor_A",
+          "source_well": "A1",
+          "volume_uL": 500
+        },
+        {
+          "liquid": "precursor_B",
+          "source_well": "A2",
+          "volume_uL": 500
+        }
+      ],
+      "biologic": {}
+    },
+    {
+      "well": "C3",
+      "enabled": true,
+      "solution": [
+        {
+          "liquid": "precursor_A",
+          "source_well": "A1",
+          "volume_uL": 500
+        },
+        {
+          "liquid": "precursor_B",
+          "source_well": "A2",
+          "volume_uL": 500
+        }
+      ],
+      "biologic": {}
+    },
+    {
+      "well": "D3",
+      "enabled": true,
+      "solution": [
+        {
+          "liquid": "precursor_A",
+          "source_well": "A1",
+          "volume_uL": 500
+        },
+        {
+          "liquid": "precursor_B",
+          "source_well": "A2",
+          "volume_uL": 500
+        }
+      ],
+      "biologic": {}
+    },
+    {
+      "well": "A4",
+      "enabled": true,
+      "solution": [
+        {
+          "liquid": "precursor_A",
+          "source_well": "A1",
+          "volume_uL": 500
+        },
+        {
+          "liquid": "precursor_B",
+          "source_well": "A2",
+          "volume_uL": 500
+        }
+      ],
+      "biologic": {}
+    },
+    {
+      "well": "B4",
+      "enabled": true,
+      "solution": [
+        {
+          "liquid": "precursor_A",
+          "source_well": "A1",
+          "volume_uL": 500
+        },
+        {
+          "liquid": "precursor_B",
+          "source_well": "A2",
+          "volume_uL": 500
+        }
+      ],
+      "biologic": {}
+    },
+    {
+      "well": "C4",
+      "enabled": true,
+      "solution": [
+        {
+          "liquid": "precursor_A",
+          "source_well": "A1",
+          "volume_uL": 500
+        },
+        {
+          "liquid": "precursor_B",
+          "source_well": "A2",
+          "volume_uL": 500
+        }
+      ],
+      "biologic": {}
+    },
+    {
+      "well": "D4",
+      "enabled": true,
+      "solution": [
+        {
+          "liquid": "precursor_A",
+          "source_well": "A1",
+          "volume_uL": 500
+        },
+        {
+          "liquid": "precursor_B",
+          "source_well": "A2",
+          "volume_uL": 500
+        }
+      ],
+      "biologic": {}
+    },
+    {
+      "well": "A5",
+      "enabled": true,
+      "solution": [
+        {
+          "liquid": "precursor_A",
+          "source_well": "A1",
+          "volume_uL": 500
+        },
+        {
+          "liquid": "precursor_B",
+          "source_well": "A2",
+          "volume_uL": 500
+        }
+      ],
+      "biologic": {}
+    },
+    {
+      "well": "B5",
+      "enabled": true,
+      "solution": [
+        {
+          "liquid": "precursor_A",
+          "source_well": "A1",
+          "volume_uL": 500
+        },
+        {
+          "liquid": "precursor_B",
+          "source_well": "A2",
+          "volume_uL": 500
+        }
+      ],
+      "biologic": {}
+    },
+    {
+      "well": "C5",
+      "enabled": true,
+      "solution": [
+        {
+          "liquid": "precursor_A",
+          "source_well": "A1",
+          "volume_uL": 500
+        },
+        {
+          "liquid": "precursor_B",
+          "source_well": "A2",
+          "volume_uL": 500
+        }
+      ],
+      "biologic": {}
+    },
+    {
+      "well": "D5",
+      "enabled": true,
+      "solution": [
+        {
+          "liquid": "precursor_A",
+          "source_well": "A1",
+          "volume_uL": 500
+        },
+        {
+          "liquid": "precursor_B",
+          "source_well": "A2",
+          "volume_uL": 500
+        }
+      ],
+      "biologic": {}
+    },
+    {
+      "well": "A6",
+      "enabled": true,
+      "solution": [
+        {
+          "liquid": "precursor_A",
+          "source_well": "A1",
+          "volume_uL": 500
+        },
+        {
+          "liquid": "precursor_B",
+          "source_well": "A2",
+          "volume_uL": 500
+        }
+      ],
+      "biologic": {}
+    },
+    {
+      "well": "B6",
+      "enabled": true,
+      "solution": [
+        {
+          "liquid": "precursor_A",
+          "source_well": "A1",
+          "volume_uL": 500
+        },
+        {
+          "liquid": "precursor_B",
+          "source_well": "A2",
+          "volume_uL": 500
+        }
+      ],
+      "biologic": {}
+    },
+    {
+      "well": "C6",
+      "enabled": true,
+      "solution": [
+        {
+          "liquid": "precursor_A",
+          "source_well": "A1",
+          "volume_uL": 500
+        },
+        {
+          "liquid": "precursor_B",
+          "source_well": "A2",
+          "volume_uL": 500
+        }
+      ],
+      "biologic": {}
+    },
+    {
+      "well": "D6",
+      "enabled": true,
+      "solution": [
+        {
+          "liquid": "precursor_A",
+          "source_well": "A1",
+          "volume_uL": 500
+        },
+        {
+          "liquid": "precursor_B",
+          "source_well": "A2",
+          "volume_uL": 500
+        }
+      ],
+      "biologic": {}
+    }
+  ]
+}
