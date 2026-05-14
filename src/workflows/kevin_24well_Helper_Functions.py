@@ -51,6 +51,10 @@ def enabled_experiments(plan: dict[str, Any]) -> list[dict[str, Any]]:
     return [exp for exp in plan.get("experiments", []) if exp.get("enabled", True)]
 
 
+def well_names_96() -> list[str]:
+    return [f"{row}{col}" for row in "ABCDEFGH" for col in range(1, 13)]
+
+
 def validate_plan(plan: dict[str, Any]) -> None:
     defaults = plan.get("defaults", {})
     max_volume = float(defaults.get("max_reactor_volume_uL", 2664))
@@ -260,6 +264,310 @@ async def flush_wells_from_plan(
 
     await otflex.flushWell(params)
     return params
+
+
+def load_sample_positions(path: str | Path) -> dict[str, Any]:
+    path = Path(path)
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    positions = data.get("positions", [])
+    if not positions:
+        raise ValueError(f"No positions found in {path}")
+
+    seen = set()
+    for idx, position in enumerate(positions):
+        name = position.get("position") or position.get("well")
+        well = position.get("well") or name
+        if not name or not well:
+            raise ValueError(f"Position {idx} in {path} is missing position/well")
+        if name in seen:
+            raise ValueError(f"Duplicate sample position {name!r} in {path}")
+        seen.add(name)
+        position.setdefault("position", name)
+        position.setdefault("well", well)
+        position.setdefault("offsetX", 0.0)
+        position.setdefault("offsetY", 0.0)
+        position.setdefault("offsetZ", 0.0)
+        position.setdefault("dispense_origin", data.get("default_dispense_origin", "top"))
+
+    return data
+
+
+def _read_sample_state(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {"version": 1, "next_index": 0, "filled_positions": [], "history": []}
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _write_sample_state(path: Path, state: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(state, f, indent=2)
+        f.write("\n")
+
+
+def _reserve_sample_position(
+    *,
+    state_path: Path,
+    positions_data: dict[str, Any],
+    source_well: str,
+    cycles_per_well: int,
+    volume_uL: int,
+    dry_run: bool,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    positions = positions_data["positions"]
+    state = _read_sample_state(state_path)
+    in_progress = state.get("in_progress")
+    if in_progress:
+        raise RuntimeError(
+            "Sample storage state has an in-progress transfer. Inspect or clear "
+            f"{state_path} before continuing: {in_progress}"
+        )
+
+    filled = {
+        item.get("position")
+        for item in state.get("filled_positions", [])
+        if isinstance(item, dict)
+    }
+    next_index = int(state.get("next_index", 0))
+    while next_index < len(positions) and positions[next_index]["position"] in filled:
+        next_index += 1
+    if next_index >= len(positions):
+        raise RuntimeError(f"No unused sample storage positions remain in {positions_data.get('name', 'positions')}")
+
+    position = positions[next_index]
+    reservation = {
+        "source_well": source_well,
+        "position": position["position"],
+        "position_well": position["well"],
+        "position_index": next_index,
+        "transfers_completed": 0,
+        "cycles_per_well": int(cycles_per_well),
+        "volume_uL_per_cycle": int(volume_uL),
+        "started_at": datetime.now().isoformat(timespec="seconds"),
+    }
+    state["positions_file"] = str(positions_data.get("_path", ""))
+    state["in_progress"] = reservation
+    state["next_index"] = next_index
+    if not dry_run:
+        _write_sample_state(state_path, state)
+    return position, state
+
+
+async def transfer_reactor_samples_to_storage(
+    otflex: Any,
+    plan: dict[str, Any],
+    *,
+    positions_path: str | Path,
+    state_path: str | Path,
+    dry_run: bool = True,
+    wells: list[str] | None = None,
+    storage_labware: str = "vial_cap_storage",
+    volume_uL: int = 1000,
+    cycles_per_well: int = 3,
+    aspirate_offset_z: float | None = None,
+    dispense_offset_z: float | None = None,
+    move_speed: int | None = None,
+    pipette: str | None = None,
+    tiprack: str | None = None,
+    blowout: bool = True,
+) -> list[dict[str, Any]]:
+    defaults = plan.get("defaults", {})
+    positions_path = Path(positions_path)
+    state_path = Path(state_path)
+    positions_data = load_sample_positions(positions_path)
+    positions_data["_path"] = str(positions_path)
+
+    target_wells = wells or [exp["well"] for exp in enabled_experiments(plan)]
+    reactor_labware = defaults.get("reactor_labware", "auto_reactor")
+    pipette = pipette or defaults.get("pipette", "p1000_single_flex")
+    tiprack = tiprack or defaults.get("tiprack", "tiprack_1000ul")
+    speed = int(move_speed if move_speed is not None else defaults.get("solution_move_speed", 120))
+    fill_height = float(defaults.get("solution_to_offset", {}).get("offsetZ", 20.0))
+    aspirate_z = float(aspirate_offset_z if aspirate_offset_z is not None else fill_height - 0.5)
+    dispense_z_default = float(dispense_offset_z if dispense_offset_z is not None else 0.0)
+
+    if int(volume_uL) <= 0:
+        raise ValueError("volume_uL must be > 0")
+    if int(cycles_per_well) <= 0:
+        raise ValueError("cycles_per_well must be > 0")
+
+    if dry_run:
+        state = _read_sample_state(state_path)
+        next_index = int(state.get("next_index", 0))
+        preview = []
+        for idx, well in enumerate(target_wells):
+            if next_index + idx >= len(positions_data["positions"]):
+                raise RuntimeError("Not enough unused sample storage positions for dry-run preview.")
+            position = positions_data["positions"][next_index + idx]
+            result = {
+                "source_well": well,
+                "destination_position": position["position"],
+                "destination_well": position["well"],
+                "cycles": int(cycles_per_well),
+                "total_volume_uL": int(volume_uL) * int(cycles_per_well),
+            }
+            preview.append(result)
+            print("[DRY RUN] sample transfer", result)
+        return preview
+
+    if otflex is None:
+        raise RuntimeError("Run the setup/connect notebook first in this same kernel. Missing: otflex")
+    rt = _rt_from_otflex(otflex)
+    if getattr(rt, "oc", None) is None:
+        raise RuntimeError("OTFlex runtime OpenTrons client is not configured. Run Connect Devices first.")
+
+    reactor_id = rt.lw_ids.get(reactor_labware, reactor_labware)
+    storage_id = rt.lw_ids.get(storage_labware, storage_labware)
+    tiprack_id = rt.lw_ids.get(tiprack, tiprack)
+    if storage_labware not in rt.lw_ids:
+        raise RuntimeError(
+            f"Storage labware {storage_labware!r} is not loaded in the OTFlex runtime. "
+            "Load/register the storage labware in the setup cell before running sample transfer."
+        )
+    if tiprack not in rt.lw_ids:
+        raise RuntimeError(f"Tiprack {tiprack!r} is not loaded in the OTFlex runtime.")
+    results = []
+
+    for source_well in target_wells:
+        position, state = _reserve_sample_position(
+            state_path=state_path,
+            positions_data=positions_data,
+            source_well=source_well,
+            cycles_per_well=cycles_per_well,
+            volume_uL=volume_uL,
+            dry_run=False,
+        )
+        destination_well = position["well"]
+        destination_position = position["position"]
+        destination_x = float(position.get("offsetX", 0.0))
+        destination_y = float(position.get("offsetY", 0.0))
+        destination_z = float(position.get("offsetZ", dispense_z_default))
+        destination_origin = position.get("dispense_origin", positions_data.get("default_dispense_origin", "top"))
+
+        if rt.tip_tracker is None:
+            raise RuntimeError("OTFlex tip tracker is not configured; cannot allocate a fresh pipette tip.")
+        _tip_index, tip_well = rt.tip_tracker.next_tip()
+
+        print(
+            f"Sampling {source_well} -> {storage_labware}.{destination_position} "
+            f"({cycles_per_well} x {volume_uL} uL) using tip {tip_well}"
+        )
+        await asyncio.to_thread(
+            rt.oc.moveToWell,
+            strLabwareName=tiprack_id,
+            strWellName=tip_well,
+            strPipetteName=pipette,
+            strOffsetStart="top",
+            fltOffsetX=0.0,
+            fltOffsetY=0.0,
+            fltOffsetZ=0.0,
+            intSpeed=speed,
+        )
+        await asyncio.to_thread(
+            rt.oc.pickUpTip,
+            strLabwareName=tiprack_id,
+            strPipetteName=pipette,
+            strWellName=tip_well,
+        )
+
+        try:
+            for cycle in range(1, int(cycles_per_well) + 1):
+                await asyncio.to_thread(
+                    rt.oc.moveToWell,
+                    strLabwareName=reactor_id,
+                    strWellName=source_well,
+                    strPipetteName=pipette,
+                    strOffsetStart="top",
+                    fltOffsetX=0.0,
+                    fltOffsetY=0.0,
+                    fltOffsetZ=0.0,
+                    intSpeed=speed,
+                )
+                await asyncio.to_thread(
+                    rt.oc.aspirate,
+                    strLabwareName=reactor_id,
+                    strWellName=source_well,
+                    strPipetteName=pipette,
+                    intVolume=int(volume_uL),
+                    strOffsetStart="bottom",
+                    fltOffsetX=0.0,
+                    fltOffsetY=0.0,
+                    fltOffsetZ=aspirate_z,
+                )
+                await asyncio.to_thread(
+                    rt.oc.moveToWell,
+                    strLabwareName=reactor_id,
+                    strWellName=source_well,
+                    strPipetteName=pipette,
+                    strOffsetStart="top",
+                    fltOffsetX=0.0,
+                    fltOffsetY=0.0,
+                    fltOffsetZ=0.0,
+                    intSpeed=speed,
+                )
+                await asyncio.to_thread(
+                    rt.oc.moveToWell,
+                    strLabwareName=storage_id,
+                    strWellName=destination_well,
+                    strPipetteName=pipette,
+                    strOffsetStart="top",
+                    fltOffsetX=destination_x,
+                    fltOffsetY=destination_y,
+                    fltOffsetZ=0.0,
+                    intSpeed=speed,
+                )
+                await asyncio.to_thread(
+                    rt.oc.dispense,
+                    strLabwareName=storage_id,
+                    strWellName=destination_well,
+                    strPipetteName=pipette,
+                    intVolume=int(volume_uL),
+                    strOffsetStart=destination_origin,
+                    fltOffsetX=destination_x,
+                    fltOffsetY=destination_y,
+                    fltOffsetZ=destination_z,
+                )
+                if blowout:
+                    await asyncio.to_thread(
+                        rt.oc.blowout,
+                        strLabwareName=storage_id,
+                        strWellName=destination_well,
+                        strPipetteName=pipette,
+                        strOffsetStart=destination_origin,
+                        fltOffsetX=destination_x,
+                        fltOffsetY=destination_y,
+                        fltOffsetZ=destination_z,
+                    )
+
+                state = _read_sample_state(state_path)
+                state["in_progress"]["transfers_completed"] = cycle
+                _write_sample_state(state_path, state)
+        finally:
+            try:
+                await asyncio.to_thread(rt.oc.dropTip, strPipetteName=pipette, boolDropInDisposal=True)
+            except Exception as exc:
+                print(f"[WARN] Could not drop sample-transfer tip after {source_well}: {exc}")
+
+        state = _read_sample_state(state_path)
+        completed = {
+            "source_well": source_well,
+            "position": destination_position,
+            "position_well": destination_well,
+            "cycles": int(cycles_per_well),
+            "total_volume_uL": int(volume_uL) * int(cycles_per_well),
+            "completed_at": datetime.now().isoformat(timespec="seconds"),
+        }
+        state.setdefault("filled_positions", []).append(completed)
+        state.setdefault("history", []).append(completed)
+        state["next_index"] = int(position.get("index", state["in_progress"]["position_index"])) + 1
+        state["in_progress"] = None
+        _write_sample_state(state_path, state)
+        results.append(completed)
+        print(f"Completed sample transfer: {source_well} -> {destination_position}")
+
+    return results
 
 
 def require_setup_namespace(ns: dict[str, Any], names: list[str]) -> None:
@@ -526,6 +834,7 @@ async def ultrasonic_clean_electrode(
     stations: tuple[str, ...] = ("A", "B"),
     channel: int = 1,
     duration_s: float = 15.0,
+    return_tool: bool = True,
 ) -> None:
     if dry_run:
         print(f"[DRY RUN] ultrasonic cleaning at stations {', '.join(stations)} for {duration_s}s each")
@@ -538,7 +847,7 @@ async def ultrasonic_clean_electrode(
             await move_electrode_to_ultrasonic(otflex, ec_state, defaults, station=station)
             await run_ultrasonic_clean(ultra, ec_state, channel=channel, duration_s=duration_s, dry_run=False)
     finally:
-        if ec_state.get("tool_attached", False):
+        if return_tool and ec_state.get("tool_attached", False):
             await return_electrode_tool(otflex, ec_state, defaults)
 
 
